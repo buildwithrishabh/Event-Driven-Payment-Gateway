@@ -13,6 +13,7 @@ import { startOutboxRelay } from "./workers/outbox.relay.js";
 import "./workers/payment.worker.js";
 import "./workers/webhook.worker.js";
 import webhookRoutes from "./modules/webhooks/webhook.routes.js";
+import { startReconciliationWorker } from "./workers/reconciliation.worker.js";
 
 
 const app = express();
@@ -54,6 +55,7 @@ app.use("/v1/webhooks" , webhookRoutes)
 async function startServer() {
   await connectDB();
   startOutboxRelay(1500);
+  startReconciliationWorker(60000) // check every 60 seconds
 
   app.listen(PORT, () => {
     logger.info(`🚀 Gateway API running at http://localhost:${PORT}`);
