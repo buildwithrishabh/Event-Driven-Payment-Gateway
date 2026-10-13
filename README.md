@@ -28,15 +28,15 @@ This project implements an **event-driven, fault-tolerant payment pipeline**:
 
 ```mermaid
 flowchart TD
-    Client["Client / Merchant"] -->|1. POST /payments + Idempotency-Key| Gateway["API Gateway (Express)"]
-    Gateway -->|2. Redis Lock & Cache| Idem["Idempotency Layer"]
-    Idem -->|3. Single ACID Transaction| Mongo[("MongoDB Replica Set\n• Payment: CREATED\n• Outbox: PENDING\n• Idempotency Record")]
-    Mongo -.->|4. Instant 201 Created (<40ms)| Client
+    Client["Client / Merchant"] -->|1. POST /payments with Idempotency-Key| Gateway["API Gateway - Express"]
+    Gateway -->|2. Redis Lock and Cache| Idem["Idempotency Layer"]
+    Idem -->|3. Single ACID Transaction| Mongo[("MongoDB Replica Set<br/>Payments and Outbox Docs")]
+    Mongo -.->|4. Instant 201 Created in under 40ms| Client
 
-    Mongo -->|5. Polls Pending Events (1500ms)| Relay["Outbox Relay"]
-    Relay -->|6. Enqueue Job| RedisQueue[("BullMQ Queue (Redis)")]
+    Mongo -->|5. Polls Pending Events every 1500ms| Relay["Outbox Relay"]
+    Relay -->|6. Enqueue Job| RedisQueue[("BullMQ Queue - Redis")]
     RedisQueue -->|7. Consume Job| Worker["Payment Worker"]
-    Worker -->|8. Atomic Claim & Orders API| Razorpay["Razorpay Gateway"]
+    Worker -->|8. Atomic Claim and Orders API| Razorpay["Razorpay Gateway"]
     Worker -->|9. Append-Only Credit| Ledger[("Immutable Ledger")]
     Worker -->|10. Signed HMAC Webhook| MerchantHook["Merchant Webhook URL"]
 ```

@@ -27,21 +27,21 @@ flowchart TD
     end
 
     subgraph Gateway["2. Ingestion & Protection"]
-        Auth["Auth Middleware\n(SHA-256 API Key Cache in Redis)"]
-        Idem["Idempotency Middleware\n(Redis SET NX Lock + Mongo Replay Cache)"]
+        Auth["Auth Middleware<br/>SHA-256 API Key Cache in Redis"]
+        Idem["Idempotency Middleware<br/>Redis SET NX Lock + Mongo Cache"]
     end
 
     subgraph Storage["3. ACID Storage (MongoDB Replica Set)"]
         Tx["Single ACID Transaction"]
-        PaymentsCol[("payments\n(status: CREATED)")]
-        OutboxCol[("outbox_events\n(status: PENDING)")]
+        PaymentsCol[("payments<br/>status: CREATED")]
+        OutboxCol[("outbox_events<br/>status: PENDING")]
         IdemCol[("idempotency_keys")]
     end
 
     subgraph AsyncEngine["4. Async Event Engine (Redis + BullMQ)"]
-        OutboxRelay["Outbox Relay Worker\n(Polls every 1500ms)"]
-        Queue[("BullMQ payment-queue\n(Redis Broker)")]
-        Worker["Payment Worker\n(Atomic DB Claim -> findOneAndUpdate)"]
+        OutboxRelay["Outbox Relay Worker<br/>Polls every 1500ms"]
+        Queue[("BullMQ payment-queue<br/>Redis Broker")]
+        Worker["Payment Worker<br/>Atomic DB Claim: findOneAndUpdate"]
     end
 
     subgraph External["5. External Payment Processor"]
@@ -49,18 +49,18 @@ flowchart TD
     end
 
     subgraph Settlement["6. Financial Settlement & Notifications"]
-        Ledger[("ledger_entries\n(Append-Only CREDIT)")]
-        Webhooks["Webhook Worker\n(HMAC-SHA256 Signed Retries)"]
+        Ledger[("ledger_entries<br/>Append-Only CREDIT")]
+        Webhooks["Webhook Worker<br/>HMAC-SHA256 Signed Retries"]
     end
 
     %% Flow Connections
-    Client -->|1. POST /v1/payments + Idempotency-Key| Auth
+    Client -->|1. POST /v1/payments with Idempotency-Key| Auth
     Auth --> Idem
     Idem -->|2. Begin Transaction| Tx
     Tx -->|Write| PaymentsCol
     Tx -->|Write| OutboxCol
     Tx -->|Write| IdemCol
-    Tx -.->|3. Return 201 Created in < 40ms| Client
+    Tx -.->|3. Return 201 Created in under 40ms| Client
 
     OutboxCol -->|4. Polls pending events| OutboxRelay
     OutboxRelay -->|5. Enqueue Job| Queue
