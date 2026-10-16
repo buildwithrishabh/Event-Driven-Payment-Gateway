@@ -14,7 +14,7 @@ import "./workers/payment.worker.js";
 import "./workers/webhook.worker.js";
 import webhookRoutes from "./modules/webhooks/webhook.routes.js";
 import { startReconciliationWorker } from "./workers/reconciliation.worker.js";
-
+import checkoutRoutes from "./modules/checkout/checkout.routes.js";
 
 const app = express();
 
@@ -28,7 +28,7 @@ app.use(
     verify: (req, res, buf) => {
       req.rawBody = buf.toString("utf8");
     },
-  })
+  }),
 );
 
 // HTTP request logging
@@ -47,15 +47,16 @@ app.get("/health", async (req, res) => {
   });
 });
 
-app.use("/v1/merchants" , merchantsRoutes);
-app.use("/v1/payments" , paymentRoutes);
+app.use("/v1/merchants", merchantsRoutes);
+app.use("/v1/payments", paymentRoutes);
 app.use("/v1/ledger", ledgerRoutes);
-app.use("/v1/webhooks" , webhookRoutes)
+app.use("/v1/webhooks", webhookRoutes);
+app.use("/v1/checkout", checkoutRoutes);
 
 async function startServer() {
   await connectDB();
   startOutboxRelay(1500);
-  startReconciliationWorker(60000) // check every 60 seconds
+  startReconciliationWorker(60000); // check every 60 seconds
 
   app.listen(PORT, () => {
     logger.info(`🚀 Gateway API running at http://localhost:${PORT}`);
