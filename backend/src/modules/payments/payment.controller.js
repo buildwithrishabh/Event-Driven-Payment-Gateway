@@ -18,48 +18,31 @@ export async function createPayment(req, res) {
     });
   }
 
-  // Start MongoDB Multi-Document ACID Transaction
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
-    // 1. Create Payment in CREATED State
-    const [payment] = await Payment.create(
-      [
-        {
-          merchantId: req.merchant._id,
-          amount,
-          currency: (currency || "INR").toUpperCase(),
-          customerEmail,
-          customerPhone: customerPhone || null,
-          status: "CREATED",
-        },
-      ],
-      { session },
-    );
+    // 1. Payment create karo
+    const payment = await Payment.create({
+      merchantId: req.merchant._id,
+      amount,
+      currency: (currency || "INR").toUpperCase(),
+      customerEmail,
+      customerPhone: customerPhone || null,
+      status: "CREATED",
+    });
 
-    // 2. Insert Outbox Event in the same transaction
-    await OutboxEvent.create(
-      [
-        {
-          aggregateType: "PAYMENT",
-          aggregateId: payment._id.toString(),
-          eventType: "PAYMENT_CREATED",
-          payload: {
-            paymentId: payment._id.toString(),
-            merchantId: req.merchant._id,
-            amount: payment.amount,
-            currency: payment.currency,
-            customerEmail: payment.customerEmail,
-          },
-          status: "PENDING",
-        },
-      ],
-      { session },
-    );
-
-    // Commit both writes atomically
-    await session.commitTransaction();
+    // 2. Outbox Event create karo (taaki worker process kar sake)
+    await OutboxEvent.create({
+      aggregateType: "PAYMENT",
+      aggregateId: payment._id.toString(),
+      eventType: "PAYMENT_CREATED",
+      payload: {
+        paymentId: payment._id.toString(),
+        merchantId: req.merchant._id,
+        amount: payment.amount,
+        currency: payment.currency,
+        customerEmail: payment.customerEmail,
+      },
+      status: "PENDING",
+    });
 
     return res.status(201).json({
       paymentId: payment._id,
@@ -70,9 +53,6 @@ export async function createPayment(req, res) {
       createdAt: payment.createdAt,
     });
   } catch (error) {
-    if (session.inTransaction()) {
-      await session.abortTransaction();
-    }
     console.error("Failed to create payment:", error);
 
     if (error.name === "ValidationError") {
@@ -82,8 +62,6 @@ export async function createPayment(req, res) {
     return res
       .status(500)
       .json({ error: "Failed to initiate payment transaction" });
-  } finally {
-    session.endSession();
   }
 }
 

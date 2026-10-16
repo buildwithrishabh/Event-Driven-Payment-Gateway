@@ -20,11 +20,13 @@ export const paymentWorker = new Worker(
       },
       {
         status: "PROCESSING",
-        "processingLock.workerId": workerId,
-        "processingLock.lockedAt": new Date(),
+        processingLock: {
+          workerId: workerId,
+          lockedAt: new Date(),
+        },
       },
       {
-        new: true,
+        returnDocument: "after",
       },
     );
 

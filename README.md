@@ -127,6 +127,23 @@ The gateway will start at `http://localhost:3000`.
 
 ---
 
+## 🖥️ Frontend — Gateway Console
+
+A responsive React + Vite + Tailwind merchant dashboard lives in [`frontend/`](./frontend).
+
+```bash
+cd frontend
+npm install
+cp .env.example .env     # VITE_API_BASE_URL defaults to http://localhost:3000
+npm run dev              # http://localhost:5173
+```
+
+It authenticates with your merchant **`x-api-key`** (there is no login endpoint) and calls **only the endpoints implemented in this backend**. Screens that need endpoints which don't exist yet show an honest **"Endpoint not implemented"** state — no mock data — and a matching TODO comment has been added to the relevant backend route file describing the API to build.
+
+See [`frontend/README.md`](./frontend/README.md) for the full list of required endpoints and how to wire them up.
+
+---
+
 ## 🧪 Quick Testing Guide (cURL)
 
 ### 1. Register a Merchant
