@@ -13,6 +13,7 @@ import WebhooksPage from "./pages/WebhooksPage.jsx";
 import ApiReferencePage from "./pages/ApiReferencePage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
+import CheckoutPage from "./pages/CheckoutPage.jsx";
 
 /** Reset scroll on navigation. */
 function ScrollToTop() {
@@ -45,6 +46,8 @@ export default function App() {
       <ScrollToTop />
       <Routes>
         <Route path="/connect" element={<ConnectRoute />} />
+        <Route path="/checkout/:id" element={<CheckoutPage />} />
+        <Route path="/pay/:id" element={<CheckoutPage />} />
 
         <Route
           element={

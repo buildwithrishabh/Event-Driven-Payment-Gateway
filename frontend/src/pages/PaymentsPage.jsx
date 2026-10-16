@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { CheckCircle2, CreditCard, RefreshCw, Search, Send } from "lucide-react";
+import { CheckCircle2, CreditCard, ExternalLink, RefreshCw, Search, Send } from "lucide-react";
 import { createPayment, getPayments } from "../lib/api.js";
 import { formatDateTime, formatMoney, generateIdempotencyKey, shortId, toMinorUnits } from "../lib/format.js";
 import { CURRENCIES, PAYMENT_STATUS_STYLES, statusStyle } from "../lib/constants.js";
@@ -114,6 +114,14 @@ export default function PaymentsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Link
+                to={`/checkout/${receipt.payment.paymentId}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 transition-colors"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> Open Checkout UI
+              </Link>
               <Link
                 to={`/payments/${receipt.payment.paymentId}`}
                 className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 shadow-2xs hover:bg-brand-50"
@@ -302,13 +310,27 @@ export default function PaymentsPage() {
                         <td className="whitespace-nowrap px-5 py-3.5 text-xs text-ink-500">
                           {formatDateTime(payment.createdAt)}
                         </td>
-                        <td className="px-5 py-3.5 text-right">
-                          <Link
-                            to={`/payments/${payment.paymentId}`}
-                            className="text-xs font-semibold text-brand-600 hover:underline"
-                          >
-                            Details →
-                          </Link>
+                        <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-3">
+                            {payment.status !== "SUCCEEDED" && (
+                              <Link
+                                to={`/checkout/${payment.paymentId}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline"
+                                title="Open customer checkout session"
+                              >
+                                <span>Checkout</span>
+                                <ExternalLink className="h-3 w-3" />
+                              </Link>
+                            )}
+                            <Link
+                              to={`/payments/${payment.paymentId}`}
+                              className="text-xs font-semibold text-brand-600 hover:underline"
+                            >
+                              Details →
+                            </Link>
+                          </div>
                         </td>
                       </tr>
                     );

@@ -164,3 +164,69 @@ export function getLedgerEntries(apiKey, params = {}) {
   const query = queryParams.toString() ? `?${queryParams.toString()}` : "";
   return request(`/v1/ledger/entries${query}`, { apiKey });
 }
+
+/* -------------------------------------------------------------------------- */
+/* Public Checkout Session Endpoints (Customer-Facing / No API Key required)  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * GET /v1/checkout/:id — fetch public checkout session data
+ * @param {string} id
+ */
+export async function getCheckoutSession(id) {
+  try {
+    return await request(`/v1/checkout/${encodeURIComponent(id)}`);
+  } catch (err) {
+    // Fallback if mounted at /checkout/:id
+    if (err.status === 404) {
+      try {
+        return await request(`/checkout/${encodeURIComponent(id)}`);
+      } catch {
+        throw err;
+      }
+    }
+    throw err;
+  }
+}
+
+/**
+ * POST /v1/checkout/verify — verify Razorpay checkout signature
+ * @param {{ paymentId: string, razorpayOrderId: string, razorpayPaymentId: string, razorpaySignature: string }} payload
+ */
+export async function verifyCheckoutPayment(payload) {
+  try {
+    return await request("/v1/checkout/verify", {
+      method: "POST",
+      body: payload,
+    });
+  } catch (err) {
+    if (err.status === 404) {
+      return await request("/checkout/verify", {
+        method: "POST",
+        body: payload,
+      });
+    }
+    throw err;
+  }
+}
+
+/**
+ * POST /v1/checkout/simulate — test simulator for checkout payment (success or failure)
+ * @param {{ paymentId: string, status?: string, failureReason?: string }} payload
+ */
+export async function simulateCheckoutPayment(payload) {
+  try {
+    return await request("/v1/checkout/simulate", {
+      method: "POST",
+      body: payload,
+    });
+  } catch (err) {
+    if (err.status === 404) {
+      return await request("/checkout/simulate", {
+        method: "POST",
+        body: payload,
+      });
+    }
+    throw err;
+  }
+}

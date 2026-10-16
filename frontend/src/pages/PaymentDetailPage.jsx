@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Receipt, RefreshCw } from "lucide-react";
+import { ArrowLeft, ExternalLink, Receipt, RefreshCw } from "lucide-react";
 import { ApiError, getPayment } from "../lib/api.js";
 import { formatDateTime, formatMoney } from "../lib/format.js";
 import { PAYMENT_STATUS_STYLES, statusStyle } from "../lib/constants.js";
@@ -38,6 +38,14 @@ export default function PaymentDetailPage() {
         description={payment ? `Reference ID ${payment._id || id}` : "Inspect transaction ledger details."}
         actions={
           <div className="flex items-center gap-2">
+            <Link
+              to={`/checkout/${payment?._id || id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 transition-colors"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> Open Checkout UI
+            </Link>
             <Button variant="secondary" size="sm" onClick={refresh} loading={loading}>
               <RefreshCw className="h-3.5 w-3.5" /> Refresh
             </Button>
@@ -112,6 +120,24 @@ export default function PaymentDetailPage() {
                         {payment._id}
                       </code>
                       <CopyButton value={payment._id} showLabel={false} label="Copy payment ID" />
+                    </span>
+                  </InfoRow>
+                  <InfoRow label="Checkout URL">
+                    <span className="flex items-center gap-2">
+                      <a
+                        href={`/checkout/${payment._id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="truncate font-mono text-xs font-semibold text-brand-600 hover:underline max-w-[240px] inline-flex items-center gap-1"
+                      >
+                        <span>/checkout/{payment._id}</span>
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                      </a>
+                      <CopyButton
+                        value={`${window.location.origin}/checkout/${payment._id}`}
+                        showLabel={false}
+                        label="Copy customer checkout URL"
+                      />
                     </span>
                   </InfoRow>
                   <InfoRow label="Customer Email" value={payment.customerEmail || "—"} />
