@@ -11,13 +11,12 @@ import {
   Wallet,
   Webhook,
 } from "lucide-react";
-import { getBalance } from "../lib/api.js";
+import { getBalance, getPayments } from "../lib/api.js";
 import { formatMoney, shortId, timeAgo } from "../lib/format.js";
 import { PAYMENT_STATUS_STYLES, statusStyle } from "../lib/constants.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useHealth } from "../hooks/useHealth.js";
 import { useFetch } from "../hooks/useFetch.js";
-import { useSessionPayments } from "../lib/paymentStore.js";
 import PageHeader from "../components/ui/PageHeader.jsx";
 import StatCard from "../components/ui/StatCard.jsx";
 import Button from "../components/ui/Button.jsx";
@@ -27,13 +26,29 @@ import { SkeletonCard } from "../components/ui/Skeleton.jsx";
 
 export default function DashboardPage() {
   const { apiKey, isConnected, merchant } = useAuth();
-  const payments = useSessionPayments();
   const balance = useFetch(() => getBalance(apiKey), [apiKey], { enabled: isConnected });
+  const paymentsFetch = useFetch(
+    () => getPayments(apiKey, { limit: 10 }),
+    [apiKey],
+    { enabled: isConnected },
+  );
   const health = useHealth();
   const balanceData = balance.data?.balance || balance.data;
   const currency = balanceData?.currency || "INR";
+
+  const payments = (paymentsFetch.data?.data || []).map((p) => ({
+    ...p,
+    paymentId: p.paymentId || p._id,
+  }));
   const succeeded = payments.filter((payment) => payment.status === "SUCCEEDED").length;
-  const recent = [...payments].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
+  const recent = [...payments]
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 5);
+
+  const handleSync = () => {
+    balance.refresh();
+    paymentsFetch.refresh();
+  };
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -45,9 +60,9 @@ export default function DashboardPage() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={balance.refresh}
-              loading={balance.loading}
-              title="Refresh ledger balance"
+              onClick={handleSync}
+              loading={balance.loading || paymentsFetch.loading}
+              title="Refresh ledger balance and transactions"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Sync
@@ -96,7 +111,7 @@ export default function DashboardPage() {
             icon={CreditCard}
             tone="success"
             value={succeeded}
-            sublabel={`${payments.length} total recorded in session`}
+            sublabel={`${payments.length} total transactions`}
           />
           <StatCard
             label="Total credited"
@@ -114,7 +129,7 @@ export default function DashboardPage() {
         <Card className="flex flex-col">
           <CardHeader
             title="Recent transactions"
-            description="Payments processed in this session."
+            description="Latest transactions synchronized from ClearLedger database."
             action={
               <Link
                 to="/payments"

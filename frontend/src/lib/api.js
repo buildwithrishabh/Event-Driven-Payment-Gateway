@@ -12,8 +12,10 @@
  *   POST /v1/merchants                  -> registerMerchant()
  *   GET  /v1/merchants/me               -> getProfile()
  *   POST /v1/payments                   -> createPayment()
+ *   GET  /v1/payments                   -> getPayments()
  *   GET  /v1/payments/:id               -> getPayment()
  *   GET  /v1/ledger/balance             -> getBalance()
+ *   GET  /v1/ledger/entries             -> getLedgerEntries()
  *   POST /v1/webhooks/razorpay          -> (server-to-server only, not called by the UI)
  */
 
@@ -130,7 +132,35 @@ export function getPayment(id, apiKey) {
   return request(`/v1/payments/${encodeURIComponent(id)}`, { apiKey });
 }
 
+/**
+ * GET /v1/payments — list payments for the authenticated merchant.
+ * @param {string} apiKey
+ * @param {{ status?: string, search?: string, page?: number, limit?: number }} [params]
+ */
+export function getPayments(apiKey, params = {}) {
+  const queryParams = new URLSearchParams();
+  if (params.status) queryParams.set("status", params.status);
+  if (params.search) queryParams.set("search", params.search);
+  if (params.page) queryParams.set("page", String(params.page));
+  if (params.limit) queryParams.set("limit", String(params.limit));
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : "";
+  return request(`/v1/payments${query}`, { apiKey });
+}
+
 /** GET /v1/ledger/balance — aggregated merchant balance for the first currency group. */
 export function getBalance(apiKey) {
   return request("/v1/ledger/balance", { apiKey });
+}
+
+/**
+ * GET /v1/ledger/entries — list double-entry journal records.
+ * @param {string} apiKey
+ * @param {{ page?: number, limit?: number }} [params]
+ */
+export function getLedgerEntries(apiKey, params = {}) {
+  const queryParams = new URLSearchParams();
+  if (params.page) queryParams.set("page", String(params.page));
+  if (params.limit) queryParams.set("limit", String(params.limit));
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : "";
+  return request(`/v1/ledger/entries${query}`, { apiKey });
 }

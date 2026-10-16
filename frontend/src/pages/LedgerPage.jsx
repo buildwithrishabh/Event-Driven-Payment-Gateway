@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom";
 import { BookText, RefreshCw, TrendingDown, TrendingUp, Wallet } from "lucide-react";
-import { getBalance } from "../lib/api.js";
+import { getBalance, getLedgerEntries } from "../lib/api.js";
 import { formatDateTime, formatMoney, shortId } from "../lib/format.js";
+import { LEDGER_TYPE_STYLES, statusStyle } from "../lib/constants.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useFetch } from "../hooks/useFetch.js";
-import { useSessionPayments } from "../lib/paymentStore.js";
 import PageHeader from "../components/ui/PageHeader.jsx";
 import StatCard from "../components/ui/StatCard.jsx";
 import Button from "../components/ui/Button.jsx";
@@ -14,11 +14,21 @@ import { SkeletonCard } from "../components/ui/Skeleton.jsx";
 
 export default function LedgerPage() {
   const { apiKey, isConnected } = useAuth();
-  const payments = useSessionPayments();
-  const entries = payments.filter((payment) => payment.status === "SUCCEEDED");
   const balance = useFetch(() => getBalance(apiKey), [apiKey], { enabled: isConnected });
+  const entriesFetch = useFetch(
+    () => getLedgerEntries(apiKey, { limit: 50 }),
+    [apiKey],
+    { enabled: isConnected },
+  );
+
   const balanceData = balance.data?.balance || balance.data;
   const currency = balanceData?.currency || "INR";
+  const entries = entriesFetch.data?.data || [];
+
+  const handleRefresh = () => {
+    balance.refresh();
+    entriesFetch.refresh();
+  };
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -29,10 +39,10 @@ export default function LedgerPage() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={balance.refresh}
-            loading={balance.loading}
+            onClick={handleRefresh}
+            loading={balance.loading || entriesFetch.loading}
           >
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh balance
+            <RefreshCw className="h-3.5 w-3.5" /> Refresh ledger
           </Button>
         }
       />
@@ -84,7 +94,17 @@ export default function LedgerPage() {
       <Card>
         <CardHeader
           title="Ledger entries"
-          description="Double-entry journal records from captured payments in this session."
+          description="Immutable double-entry journal records from ClearLedger database."
+          action={
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={entriesFetch.refresh}
+              loading={entriesFetch.loading}
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Refresh entries
+            </Button>
+          }
         />
         <CardBody className="p-0">
           {entries.length ? (
@@ -100,49 +120,75 @@ export default function LedgerPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-100">
-                  {[...entries]
-                    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-                    .map((payment) => (
-                      <tr key={payment.paymentId} className="hover:bg-ink-50/70">
+                  {entries.map((entry) => {
+                    const isCredit = entry.type === "CREDIT";
+                    const paymentObj =
+                      typeof entry.paymentId === "object" && entry.paymentId !== null
+                        ? entry.paymentId
+                        : null;
+                    const paymentRefId = paymentObj?._id || entry.paymentId;
+                    const referenceLabel = shortId(paymentRefId || entry._id);
+                    const description =
+                      paymentObj?.customerEmail || entry.description || "Settlement";
+                    const typeStyle = statusStyle(LEDGER_TYPE_STYLES, entry.type);
+
+                    return (
+                      <tr key={entry._id} className="hover:bg-ink-50/70">
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-1.5">
-                            <Link
-                              to={`/payments/${payment.paymentId}`}
-                              className="font-mono text-xs font-semibold text-brand-600 hover:underline"
-                            >
-                              {shortId(payment.paymentId)}
-                            </Link>
-                            <CopyButton
-                              value={payment.paymentId}
-                              showLabel={false}
-                              label="Copy payment ID"
-                            />
+                            {paymentRefId ? (
+                              <Link
+                                to={`/payments/${paymentRefId}`}
+                                className="font-mono text-xs font-semibold text-brand-600 hover:underline"
+                              >
+                                {referenceLabel}
+                              </Link>
+                            ) : (
+                              <span className="font-mono text-xs font-semibold text-ink-700">
+                                {referenceLabel}
+                              </span>
+                            )}
+                            {paymentRefId && (
+                              <CopyButton
+                                value={String(paymentRefId)}
+                                showLabel={false}
+                                label="Copy payment ID"
+                              />
+                            )}
                           </div>
-                          <p className="mt-0.5 text-xs text-ink-500">
-                            {payment.customerEmail || "Settlement"}
-                          </p>
+                          <p className="mt-0.5 text-xs text-ink-500">{description}</p>
                         </td>
                         <td className="px-5 py-3.5">
-                          <span className="chip border-emerald-200 bg-emerald-50 text-emerald-700">
-                            Credit
+                          <span className={`chip ${typeStyle.className}`}>
+                            {typeStyle.label}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-5 py-3.5 text-xs font-semibold text-emerald-700">
-                          +{formatMoney(payment.amount, payment.currency)}
+                        <td
+                          className={`whitespace-nowrap px-5 py-3.5 text-xs font-semibold ${
+                            isCredit ? "text-emerald-700" : "text-rose-700"
+                          }`}
+                        >
+                          {isCredit ? "+" : "-"}
+                          {formatMoney(entry.amount, entry.currency)}
                         </td>
                         <td className="whitespace-nowrap px-5 py-3.5 text-xs text-ink-500">
-                          {formatDateTime(payment.createdAt)}
+                          {formatDateTime(entry.createdAt)}
                         </td>
                         <td className="px-5 py-3.5 text-right">
-                          <Link
-                            to={`/payments/${payment.paymentId}`}
-                            className="text-xs font-semibold text-brand-600 hover:underline"
-                          >
-                            Details →
-                          </Link>
+                          {paymentRefId ? (
+                            <Link
+                              to={`/payments/${paymentRefId}`}
+                              className="text-xs font-semibold text-brand-600 hover:underline"
+                            >
+                              Details →
+                            </Link>
+                          ) : (
+                            <span className="text-xs text-ink-300">—</span>
+                          )}
                         </td>
                       </tr>
-                    ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

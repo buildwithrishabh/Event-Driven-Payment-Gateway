@@ -100,6 +100,14 @@ export const IMPLEMENTED_ENDPOINTS = [
   },
   {
     method: "GET",
+    path: "/v1/payments",
+    auth: "x-api-key",
+    summary: "List transactions for the authenticated merchant with optional filters and pagination.",
+    sample: `curl "http://localhost:3000/v1/payments?limit=20&page=1" \\
+  -H "x-api-key: <YOUR_API_KEY>"`,
+  },
+  {
+    method: "GET",
     path: "/v1/payments/:id",
     auth: "x-api-key",
     summary: "Get a payment by ID for the authenticated merchant.",
@@ -112,6 +120,14 @@ export const IMPLEMENTED_ENDPOINTS = [
     auth: "x-api-key",
     summary: "Get the available balance, credits, and debits.",
     sample: `curl http://localhost:3000/v1/ledger/balance \\
+  -H "x-api-key: <YOUR_API_KEY>"`,
+  },
+  {
+    method: "GET",
+    path: "/v1/ledger/entries",
+    auth: "x-api-key",
+    summary: "List immutable double-entry journal records (credits and debits).",
+    sample: `curl "http://localhost:3000/v1/ledger/entries?limit=20&page=1" \\
   -H "x-api-key: <YOUR_API_KEY>"`,
   },
   {
@@ -128,11 +144,6 @@ export const IMPLEMENTED_ENDPOINTS = [
 /* Keep these in sync with the TODO comments added to the backend routes.       */
 /* -------------------------------------------------------------------------- */
 export const PLANNED_ENDPOINTS = {
-  paymentsList: {
-    method: "GET",
-    path: "/v1/payments",
-    purpose: "Paginated, filterable payment list for the Payments table + Overview.",
-  },
   paymentCancel: {
     method: "POST",
     path: "/v1/payments/:id/cancel",
@@ -142,11 +153,6 @@ export const PLANNED_ENDPOINTS = {
     method: "POST",
     path: "/v1/payments/:id/refund",
     purpose: "Initiate a refund and append a DEBIT ledger entry.",
-  },
-  ledgerEntries: {
-    method: "GET",
-    path: "/v1/ledger/entries",
-    purpose: "Paginated immutable ledger entries (credits/debits) for the Ledger view.",
   },
   ledgerBalances: {
     method: "GET",

@@ -151,9 +151,53 @@ export async function verifyPayment(req, res) {
       paymentId: payment._id,
       status: payment.status,
     });
-    
   } catch (error) {
     console.error("Payment verification failed:", error);
     return res.status(500).json({ error: "Failed to verify payment" });
+  }
+}
+
+// GET /v1/payments
+export async function getPayment(req, res) {
+  try {
+    const { status, search, page = 1, limit = 20 } = req.query;
+    const query = { merchantId: req.merchant._id };
+
+    // Status filter (e.g. SUCCEEDED . CREATED , FAILED)
+    if (status) {
+      query.status = status.toUpperCase();
+    }
+
+    // search by customer email
+    if (search) {
+      query.customerEmail = { $regex: search.trim(), $options: "i" };
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10)));
+
+    const skip = (pageNum - 1) * limitNum;
+
+    const [payments, total] = await Promise.all([
+      Payment.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Payment.countDocuments(query),
+    ]);
+
+    return res.json({
+      data: payments,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (error) {
+    console.error("Failed to list payments:", error);
+    return res.status(500).json({ error: "Failed to retrieve payments" });
   }
 }

@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { CheckCircle2, CreditCard, Search, Send, Trash2 } from "lucide-react";
-import { createPayment } from "../lib/api.js";
+import { CheckCircle2, CreditCard, RefreshCw, Search, Send } from "lucide-react";
+import { createPayment, getPayments } from "../lib/api.js";
 import { formatDateTime, formatMoney, generateIdempotencyKey, shortId, toMinorUnits } from "../lib/format.js";
 import { CURRENCIES, PAYMENT_STATUS_STYLES, statusStyle } from "../lib/constants.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useToast } from "../context/ToastContext.jsx";
-import { clearSessionPayments, saveSessionPayment, useSessionPayments } from "../lib/paymentStore.js";
+import { useFetch } from "../hooks/useFetch.js";
+import { saveSessionPayment } from "../lib/paymentStore.js";
 import PageHeader from "../components/ui/PageHeader.jsx";
 import Button from "../components/ui/Button.jsx";
 import Input from "../components/ui/Input.jsx";
@@ -18,7 +19,17 @@ export default function PaymentsPage() {
   const { apiKey } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
-  const payments = useSessionPayments();
+  const paymentsFetch = useFetch(
+    () => getPayments(apiKey, { limit: 50 }),
+    [apiKey],
+    { enabled: Boolean(apiKey) }
+  );
+
+  const payments = (paymentsFetch.data?.data || []).map((p) => ({
+    ...p,
+    paymentId: p.paymentId || p._id,
+  }));
+
   const [form, setForm] = useState({ amount: "", currency: "INR", customerEmail: "", customerPhone: "" });
   const [idempotencyKey, setIdempotencyKey] = useState(() => generateIdempotencyKey("pay"));
   const [search, setSearch] = useState("");
@@ -62,6 +73,7 @@ export default function PaymentsPage() {
       }, apiKey, idempotencyKey);
       saveSessionPayment({ ...data, customerEmail: form.customerEmail.trim(), customerPhone: form.customerPhone.trim() });
       setReceipt({ payment: data, replay: idempotentReplay });
+      paymentsFetch.refresh();
       if (idempotentReplay) toast.warning("Existing payment returned", `Payment ${shortId(data.paymentId)} was already created.`);
       else toast.success("Payment created", `Payment ${shortId(data.paymentId)}`);
       setIdempotencyKey(generateIdempotencyKey("pay"));
@@ -77,12 +89,6 @@ export default function PaymentsPage() {
     event.preventDefault();
     const id = lookupId.trim();
     if (id) navigate(`/payments/${encodeURIComponent(id)}`);
-  }
-
-  function handleClearHistory() {
-    if (!window.confirm("Clear payment history saved in this browser? This cannot be undone.")) return;
-    clearSessionPayments();
-    toast.info("Payment history cleared");
   }
 
   return (
@@ -210,18 +216,17 @@ export default function PaymentsPage() {
       <Card>
         <CardHeader
           title="Payment history"
-          description="Recent transactions recorded in this browser session."
+          description="Recent transactions synchronized with ClearLedger database."
           action={
-            payments.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleClearHistory}
-                className="text-rose-600 hover:bg-rose-50"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Clear session history
-              </Button>
-            )
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={paymentsFetch.refresh}
+              loading={paymentsFetch.loading}
+              title="Refresh transaction history"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Refresh
+            </Button>
           }
         />
 
