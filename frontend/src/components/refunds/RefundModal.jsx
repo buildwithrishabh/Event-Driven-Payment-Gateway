@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { createRefund } from "../../lib/api.js";
 import { formatMoney, generateIdempotencyKey, shortId, toMinorUnits } from "../../lib/format.js";
+import { getSessionPayments } from "../../lib/paymentStore.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import Button from "../ui/Button.jsx";
@@ -174,8 +175,10 @@ export default function RefundModal({
     }
   }
 
+  const recentSucceededPayments = getSessionPayments().filter((p) => p.status === "SUCCEEDED");
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6 md:p-10 flex items-center justify-center animate-fade-in">
+    <div className="fixed inset-0 z-50 p-4 sm:p-6 flex items-center justify-center animate-fade-in overflow-hidden">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-ink-950/50 backdrop-blur-xs transition-opacity"
@@ -186,9 +189,9 @@ export default function RefundModal({
       />
 
       {/* Modal Dialog */}
-      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-2xl transition-all">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-ink-100 px-6 py-4 bg-ink-50/40">
+      <div className="relative w-full max-w-lg max-h-[88vh] flex flex-col rounded-2xl border border-ink-200 bg-white shadow-2xl transition-all overflow-hidden z-10 my-auto">
+        {/* Header - Fixed at Top */}
+        <div className="flex shrink-0 items-center justify-between border-b border-ink-100 px-6 py-4 bg-ink-50/40">
           <div className="flex items-center gap-2.5">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-rose-50 text-rose-600 border border-rose-200">
               <RotateCcw className="h-4 w-4" />
@@ -211,199 +214,222 @@ export default function RefundModal({
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* General Error Banner */}
-          {errors.general && (
-            <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50/70 p-3.5 text-xs text-rose-800">
-              <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
-              <div className="flex-1">{errors.general}</div>
-            </div>
-          )}
-
-          {/* Payment Context Card */}
-          {payment ? (
-            <div className="rounded-xl border border-ink-200/80 bg-ink-50/60 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-ink-600">Target Payment</span>
-                <span className="font-mono text-xs font-medium text-ink-800">
-                  {shortId(payment.paymentId || payment._id)}
-                </span>
+        {/* Form with Scrollable Body and Fixed Footer */}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          {/* Scrollable Form Content */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {/* General Error Banner */}
+            {errors.general && (
+              <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50/70 p-3.5 text-xs text-rose-800">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+                <div className="flex-1">{errors.general}</div>
               </div>
-              <div className="grid grid-cols-3 gap-2 border-t border-ink-200/60 pt-2.5 text-xs">
-                <div>
-                  <p className="text-[11px] text-ink-400">Total Charged</p>
-                  <p className="font-semibold text-ink-900">
-                    {formatMoney(totalAmount, currency)}
-                  </p>
+            )}
+
+            {/* Payment Context Card */}
+            {payment ? (
+              <div className="rounded-xl border border-ink-200/80 bg-ink-50/60 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-ink-600">Target Payment</span>
+                  <span className="font-mono text-xs font-medium text-ink-800">
+                    {shortId(payment.paymentId || payment._id)}
+                  </span>
                 </div>
-                <div>
-                  <p className="text-[11px] text-ink-400">Refunded</p>
-                  <p className="font-semibold text-ink-700">
-                    {formatMoney(refundedAmount, currency)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] text-emerald-700 font-medium">Refundable</p>
-                  <p className="font-bold text-emerald-800">
-                    {formatMoney(remainingRefundable, currency)}
-                  </p>
+                <div className="grid grid-cols-3 gap-2 border-t border-ink-200/60 pt-2.5 text-xs">
+                  <div>
+                    <p className="text-[11px] text-ink-400">Total Charged</p>
+                    <p className="font-semibold text-ink-900">
+                      {formatMoney(totalAmount, currency)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-ink-400">Refunded</p>
+                    <p className="font-semibold text-ink-700">
+                      {formatMoney(refundedAmount, currency)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-emerald-700 font-medium">Refundable</p>
+                    <p className="font-bold text-emerald-800">
+                      {formatMoney(remainingRefundable, currency)}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <Input
-              label="Payment ID"
-              placeholder="e.g. 671146869b8fa588ca752f92"
-              value={paymentId}
-              onChange={(e) => {
-                setPaymentId(e.target.value);
-                setErrors((prev) => ({ ...prev, paymentId: undefined }));
-              }}
-              error={errors.paymentId}
-              required
-            />
-          )}
+            ) : (
+              <div className="space-y-1.5">
+                <Input
+                  label="Payment ID"
+                  placeholder="e.g. 671146869b8fa588ca752f92"
+                  value={paymentId}
+                  onChange={(e) => {
+                    setPaymentId(e.target.value);
+                    setErrors((prev) => ({ ...prev, paymentId: undefined }));
+                  }}
+                  error={errors.paymentId}
+                  required
+                />
+                {recentSucceededPayments.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[11px] text-ink-400 font-medium">Recent:</span>
+                    {recentSucceededPayments.slice(0, 3).map((p) => (
+                      <button
+                        key={p.paymentId || p._id}
+                        type="button"
+                        onClick={() => {
+                          setPaymentId(p.paymentId || p._id);
+                          setErrors((prev) => ({ ...prev, paymentId: undefined }));
+                        }}
+                        className="rounded-md border border-ink-200 bg-white px-2 py-0.5 font-mono text-[10px] font-medium text-ink-700 hover:bg-ink-100 hover:border-ink-300 transition"
+                      >
+                        {shortId(p.paymentId || p._id)} ({formatMoney(p.amount, p.currency)})
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-          {/* Refund Type Selection */}
-          <div className="space-y-2">
-            <label className="block text-xs font-semibold text-ink-700">
-              Refund Amount
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setRefundMode("full");
-                  setErrors((prev) => ({ ...prev, amount: undefined }));
-                }}
-                className={`flex flex-col items-start rounded-xl border p-3 text-left transition ${
-                  refundMode === "full"
-                    ? "border-brand-500 bg-brand-50/50 ring-2 ring-brand-500/20"
-                    : "border-ink-200 hover:border-ink-300 hover:bg-ink-50/50"
-                }`}
-              >
-                <span className="text-xs font-bold text-ink-900">Full Refund</span>
-                <span className="mt-0.5 text-[11px] text-ink-500">
-                  {payment ? formatMoney(remainingRefundable, currency) : "Entire remaining balance"}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setRefundMode("partial")}
-                className={`flex flex-col items-start rounded-xl border p-3 text-left transition ${
-                  refundMode === "partial"
-                    ? "border-brand-500 bg-brand-50/50 ring-2 ring-brand-500/20"
-                    : "border-ink-200 hover:border-ink-300 hover:bg-ink-50/50"
-                }`}
-              >
-                <span className="text-xs font-bold text-ink-900">Partial Refund</span>
-                <span className="mt-0.5 text-[11px] text-ink-500">
-                  Specify custom amount
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* Partial Amount Input & Quick Chips */}
-          {refundMode === "partial" && (
-            <div className="space-y-2.5 rounded-xl border border-ink-200/80 bg-ink-50/40 p-3.5">
-              <Input
-                label={`Amount to refund (${currency})`}
-                type="number"
-                inputMode="decimal"
-                min="0.01"
-                step="0.01"
-                placeholder={remainingMajor}
-                value={customAmount}
-                onChange={(e) => {
-                  setCustomAmount(e.target.value);
-                  setErrors((prev) => ({ ...prev, amount: undefined }));
-                }}
-                error={errors.amount}
-                required
-              />
-
-              {payment && remainingRefundable > 0 && (
-                <div className="flex items-center gap-1.5 pt-1">
-                  <span className="text-[11px] font-medium text-ink-400 mr-1">Presets:</span>
-                  {[25, 50, 75, 100].map((pct) => (
-                    <button
-                      key={pct}
-                      type="button"
-                      onClick={() => handlePresetPercent(pct)}
-                      className="rounded-lg border border-ink-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-700 hover:bg-ink-50 hover:border-ink-300 transition"
-                    >
-                      {pct === 100 ? "Max" : `${pct}%`}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Reason Selection */}
-          <div className="space-y-3">
-            <Select
-              label="Reason for refund"
-              value={reasonCategory}
-              onChange={(e) => setReasonCategory(e.target.value)}
-            >
-              {PRESET_REASONS.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </Select>
-
-            <Input
-              label="Notes or memo (optional)"
-              placeholder="e.g. Customer returned damaged parcel on Oct 17"
-              value={customNote}
-              onChange={(e) => setCustomNote(e.target.value)}
-            />
-          </div>
-
-          {/* Idempotency Protection Collapsible */}
-          <details className="group rounded-xl border border-ink-200/80 bg-ink-50/40 p-3 text-xs">
-            <summary className="flex cursor-pointer items-center justify-between font-semibold text-ink-600 select-none">
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 text-brand-600" />
-                <span>Idempotency Key</span>
-              </span>
-              <span className="text-ink-400 group-open:rotate-180 transition">▾</span>
-            </summary>
-            <div className="mt-2.5 space-y-2 text-ink-500">
-              <p className="text-[11px]">
-                Guarantees this refund will never be double-charged or processed twice.
-              </p>
-              <div className="flex items-center gap-2">
-                <code className="min-w-0 flex-1 truncate rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 font-mono text-[11px] text-ink-800">
-                  {idempotencyKey}
-                </code>
-                <Button
+            {/* Refund Type Selection */}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-ink-700">
+                Refund Amount
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
                   type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setIdempotencyKey(generateIdempotencyKey("rfn"))}
+                  onClick={() => {
+                    setRefundMode("full");
+                    setErrors((prev) => ({ ...prev, amount: undefined }));
+                  }}
+                  className={`flex flex-col items-start rounded-xl border p-3 text-left transition ${
+                    refundMode === "full"
+                      ? "border-brand-500 bg-brand-50/50 ring-2 ring-brand-500/20"
+                      : "border-ink-200 hover:border-ink-300 hover:bg-ink-50/50"
+                  }`}
                 >
-                  <RefreshCw className="h-3 w-3" />
-                </Button>
+                  <span className="text-xs font-bold text-ink-900">Full Refund</span>
+                  <span className="mt-0.5 text-[11px] text-ink-500">
+                    {payment ? formatMoney(remainingRefundable, currency) : "Entire remaining balance"}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRefundMode("partial")}
+                  className={`flex flex-col items-start rounded-xl border p-3 text-left transition ${
+                    refundMode === "partial"
+                      ? "border-brand-500 bg-brand-50/50 ring-2 ring-brand-500/20"
+                      : "border-ink-200 hover:border-ink-300 hover:bg-ink-50/50"
+                  }`}
+                >
+                  <span className="text-xs font-bold text-ink-900">Partial Refund</span>
+                  <span className="mt-0.5 text-[11px] text-ink-500">
+                    Specify custom amount
+                  </span>
+                </button>
               </div>
             </div>
-          </details>
 
-          {/* Notice */}
-          <div className="rounded-xl border border-amber-200/60 bg-amber-50/50 p-3 text-[11px] text-amber-800 flex items-start gap-2">
-            <HelpCircle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
-            <span>
-              Executing this refund triggers the upstream Razorpay refund API, records an immutable <strong>DEBIT</strong> ledger entry, and emits a webhook.
-            </span>
+            {/* Partial Amount Input & Quick Chips */}
+            {refundMode === "partial" && (
+              <div className="space-y-2.5 rounded-xl border border-ink-200/80 bg-ink-50/40 p-3.5">
+                <Input
+                  label={`Amount to refund (${currency})`}
+                  type="number"
+                  inputMode="decimal"
+                  min="0.01"
+                  step="0.01"
+                  placeholder={remainingMajor}
+                  value={customAmount}
+                  onChange={(e) => {
+                    setCustomAmount(e.target.value);
+                    setErrors((prev) => ({ ...prev, amount: undefined }));
+                  }}
+                  error={errors.amount}
+                  required
+                />
+
+                {payment && remainingRefundable > 0 && (
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <span className="text-[11px] font-medium text-ink-400 mr-1">Presets:</span>
+                    {[25, 50, 75, 100].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => handlePresetPercent(pct)}
+                        className="rounded-lg border border-ink-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-700 hover:bg-ink-50 hover:border-ink-300 transition"
+                      >
+                        {pct === 100 ? "Max" : `${pct}%`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Reason Selection */}
+            <div className="space-y-3">
+              <Select
+                label="Reason for refund"
+                value={reasonCategory}
+                onChange={(e) => setReasonCategory(e.target.value)}
+              >
+                {PRESET_REASONS.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </Select>
+
+              <Input
+                label="Notes or memo (optional)"
+                placeholder="e.g. Customer returned damaged parcel on Oct 17"
+                value={customNote}
+                onChange={(e) => setCustomNote(e.target.value)}
+              />
+            </div>
+
+            {/* Idempotency Protection Collapsible */}
+            <details className="group rounded-xl border border-ink-200/80 bg-ink-50/40 p-3 text-xs">
+              <summary className="flex cursor-pointer items-center justify-between font-semibold text-ink-600 select-none">
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5 text-brand-600" />
+                  <span>Idempotency Key</span>
+                </span>
+                <span className="text-ink-400 group-open:rotate-180 transition">▾</span>
+              </summary>
+              <div className="mt-2.5 space-y-2 text-ink-500">
+                <p className="text-[11px]">
+                  Guarantees this refund will never be double-charged or processed twice.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="min-w-0 flex-1 truncate rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 font-mono text-[11px] text-ink-800">
+                    {idempotencyKey}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setIdempotencyKey(generateIdempotencyKey("rfn"))}
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            </details>
+
+            {/* Notice */}
+            <div className="rounded-xl border border-amber-200/60 bg-amber-50/50 p-3 text-[11px] text-amber-800 flex items-start gap-2">
+              <HelpCircle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+              <span>
+                Executing this refund triggers the upstream Razorpay refund API, records an immutable <strong>DEBIT</strong> ledger entry, and emits a webhook.
+              </span>
+            </div>
           </div>
 
-          {/* Modal Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-ink-100">
+          {/* Sticky Modal Actions Footer */}
+          <div className="shrink-0 flex items-center justify-end gap-2.5 px-6 py-4 border-t border-ink-100 bg-ink-50/60">
             <Button
               type="button"
               variant="secondary"
