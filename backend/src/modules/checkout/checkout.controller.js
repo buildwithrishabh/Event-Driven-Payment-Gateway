@@ -30,6 +30,7 @@ export async function getCheckoutSession(req, res) {
       customerPhone: payment.customerPhone,
       razorpayOrderId: payment.razorpayOrderId,
       razorpayPaymentId: payment.razorpayPaymentId,
+      razorpayKeyId: process.env.RAZORPAY_KEY_ID || null,
       failureReason: payment.failureReason,
       merchant: {
         name: payment.merchantId?.name || "Merchant Store",
@@ -105,58 +106,3 @@ export async function verifyCheckoutPayment(req, res) {
   }
 }
 
-// POST /v1/checkout/simulate
-export async function simulateCheckoutPayment(req, res) {
-  const { paymentId, status = "SUCCEEDED", failureReason } = req.body;
-
-  if (!paymentId) {
-    return res.status(400).json({ error: "paymentId is required" });
-  }
-
-  try {
-    const payment = await Payment.findById(paymentId);
-    if (!payment) {
-      return res.status(404).json({ error: "Payment not found" });
-    }
-
-    if (status === "SUCCEEDED") {
-      if (payment.status !== "SUCCEEDED") {
-        payment.status = "SUCCEEDED";
-        payment.razorpayPaymentId =
-          payment.razorpayPaymentId || `pay_sim_${Date.now()}`;
-        payment.failureReason = null;
-        await payment.save();
-        // Record credit in ledger
-        await recordCredit({
-          merchantId: payment.merchantId,
-          paymentId: payment._id,
-          amount: payment.amount,
-          currency: payment.currency,
-        });
-      }
-      return res.json({
-        success: true,
-        message: "Simulated payment succeeded and credited to ledger",
-        paymentId: payment._id,
-        status: payment.status,
-      });
-    } else {
-      payment.status = "FAILED";
-      payment.failureReason =
-        failureReason || "Transaction declined by simulated issuer";
-      await payment.save();
-      return res.json({
-        success: false,
-        message: "Simulated payment marked as failed",
-        paymentId: payment._id,
-        status: payment.status,
-        failureReason: payment.failureReason,
-      });
-    }
-  } catch (error) {
-    console.error("Checkout simulation failed:", error);
-    return res
-      .status(500)
-      .json({ error: "Failed to simulate checkout payment" });
-  }
-}

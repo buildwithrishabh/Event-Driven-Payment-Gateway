@@ -210,23 +210,3 @@ export async function verifyCheckoutPayment(payload) {
   }
 }
 
-/**
- * POST /v1/checkout/simulate — test simulator for checkout payment (success or failure)
- * @param {{ paymentId: string, status?: string, failureReason?: string }} payload
- */
-export async function simulateCheckoutPayment(payload) {
-  try {
-    return await request("/v1/checkout/simulate", {
-      method: "POST",
-      body: payload,
-    });
-  } catch (err) {
-    if (err.status === 404) {
-      return await request("/checkout/simulate", {
-        method: "POST",
-        body: payload,
-      });
-    }
-    throw err;
-  }
-}
