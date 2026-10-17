@@ -26,6 +26,31 @@ export async function recordCredit({
   });
 }
 
+export async function recordDebit({
+  merchantId,
+  paymentId,
+  refundId,
+  amount,
+  currency,
+  description,
+}) {
+  const existing = await LedgerEntry.findOne({ refundId, type: "DEBIT" });
+
+  if (existing) {
+    return existing;
+  }
+
+  return await LedgerEntry.create({
+    merchantId,
+    paymentId,
+    refundId,
+    type: "DEBIT",
+    amount,
+    currency,
+    description: description || `Refund debit for ${paymentId}`,
+  });
+}
+
 // Calculate current available balance using MongoDB Aggregation Pipeline
 export async function getBalance(merchantId) {
   const pipeline = [

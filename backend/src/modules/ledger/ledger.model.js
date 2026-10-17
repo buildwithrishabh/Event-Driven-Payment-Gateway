@@ -14,6 +14,12 @@ const ledgerEntrySchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    refundId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Refund",
+      default: null,
+      index: true,
+    },
     type: {
       type: String,
       enum: ["CREDIT", "DEBIT"],

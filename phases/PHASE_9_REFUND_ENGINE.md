@@ -25,7 +25,7 @@ Merchant Client
 │  - Check Idempotency Key (Redis)                       │
 │  - Verify Payment is SUCCEEDED                         │
 │  - Verify (amount + refundedAmount) <= payment.amount   │
-│  - Mongo Transaction:                                  │
+│  - Validation & Persistence:                               │
 │    ├── Create Refund (Status: 'PENDING')               │
 │    ├── Increment payment.refundedAmount                │
 │    └── Insert OutboxEvent ('REFUND_CREATED')           │
@@ -199,114 +199,96 @@ import { Refund } from './refund.model.js';
 import { OutboxEvent } from '../payments/outbox.model.js';
 import { refundQueue } from '../../queues/refund.queue.js';
 
-export class RefundService {
-  /**
-   * Request a refund with ACID guarantees and Outbox pattern
-   */
-  static async createRefund({ merchantId, paymentId, amount, reason }) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
+/**
+ * Request a refund and persist Outbox event (standalone / non-replica set compatible)
+ */
+export async function createRefund({ merchantId, paymentId, amount, reason }) {
+  // 1. Fetch payment
+  const payment = await Payment.findOne({
+    _id: paymentId,
+    merchantId,
+  });
 
-    try {
-      // 1. Fetch payment with session lock
-      const payment = await Payment.findOne({
-        _id: paymentId,
-        merchantId,
-      }).session(session);
-
-      if (!payment) {
-        throw { statusCode: 404, message: 'Payment not found' };
-      }
-
-      if (payment.status !== 'SUCCEEDED') {
-        throw {
-          statusCode: 400,
-          message: `Cannot refund payment with status '${payment.status}'. Only SUCCEEDED payments can be refunded.`,
-        };
-      }
-
-      // Default to full refund if amount is not specified
-      const refundAmount = amount ? Number(amount) : (payment.amount - (payment.refundedAmount || 0));
-
-      if (refundAmount <= 0) {
-        throw { statusCode: 400, message: 'Refund amount must be greater than zero.' };
-      }
-
-      const currentRefunded = payment.refundedAmount || 0;
-      const remainingRefundable = payment.amount - currentRefunded;
-
-      if (refundAmount > remainingRefundable) {
-        throw {
-          statusCode: 400,
-          message: `Refund amount exceeds refundable balance. Remaining refundable: ${remainingRefundable}`,
-        };
-      }
-
-      // 2. Create Refund Record in PENDING state
-      const [refund] = await Refund.create(
-        [
-          {
-            merchantId,
-            paymentId: payment._id,
-            processorPaymentId: payment.processorPaymentId || payment.processorTransactionId,
-            amount: refundAmount,
-            currency: payment.currency,
-            reason: reason || 'requested_by_customer',
-            status: 'PENDING',
-          },
-        ],
-        { session }
-      );
-
-      // 3. Atomically update Payment refunded amount and status
-      const newTotalRefunded = currentRefunded + refundAmount;
-      payment.refundedAmount = newTotalRefunded;
-      payment.refundStatus = newTotalRefunded === payment.amount ? 'FULL' : 'PARTIAL';
-      await payment.save({ session });
-
-      // 4. Record Transactional Outbox Event
-      await OutboxEvent.create(
-        [
-          {
-            aggregateId: refund._id,
-            eventType: 'REFUND_CREATED',
-            payload: {
-              refundId: refund._id,
-              paymentId: payment._id,
-              amount: refundAmount,
-              processorPaymentId: refund.processorPaymentId,
-            },
-            status: 'PENDING',
-          },
-        ],
-        { session }
-      );
-
-      await session.commitTransaction();
-
-      // 5. Enqueue BullMQ job
-      await refundQueue.add(
-        'process-refund',
-        { refundId: refund._id.toString() },
-        { jobId: `refund_${refund._id}` }
-      );
-
-      return refund;
-    } catch (error) {
-      await session.abortTransaction();
-      throw error;
-    } finally {
-      session.endSession();
-    }
+  if (!payment) {
+    throw { statusCode: 404, message: 'Payment not found' };
   }
 
-  static async getRefundById(refundId, merchantId) {
-    return await Refund.findOne({ _id: refundId, merchantId });
+  if (payment.status !== 'SUCCEEDED') {
+    throw {
+      statusCode: 400,
+      message: `Cannot refund payment with status '${payment.status}'. Only SUCCEEDED payments can be refunded.`,
+    };
   }
 
-  static async getRefundsForPayment(paymentId, merchantId) {
-    return await Refund.find({ paymentId, merchantId }).sort({ createdAt: -1 });
+  // Default to full refund if amount is not specified
+  const refundAmount = amount
+    ? Number(amount)
+    : payment.amount - (payment.refundedAmount || 0);
+
+  if (refundAmount <= 0) {
+    throw {
+      statusCode: 400,
+      message: 'Refund amount must be greater than zero.',
+    };
   }
+
+  const currentRefunded = payment.refundedAmount || 0;
+  const remainingRefundable = payment.amount - currentRefunded;
+
+  if (refundAmount > remainingRefundable) {
+    throw {
+      statusCode: 400,
+      message: `Refund amount exceeds refundable balance. Remaining refundable: ${remainingRefundable}`,
+    };
+  }
+
+  // 2. Create Refund Record in PENDING state
+  const refund = await Refund.create({
+    merchantId,
+    paymentId: payment._id,
+    processorPaymentId: payment.processorPaymentId || payment.processorTransactionId,
+    amount: refundAmount,
+    currency: payment.currency,
+    reason: reason || 'requested_by_customer',
+    status: 'PENDING',
+  });
+
+  // 3. Update Payment refunded amount and status
+  const newTotalRefunded = currentRefunded + refundAmount;
+  payment.refundedAmount = newTotalRefunded;
+  payment.refundStatus = newTotalRefunded === payment.amount ? 'FULL' : 'PARTIAL';
+  await payment.save();
+
+  // 4. Record Outbox Event
+  await OutboxEvent.create({
+    aggregateType: 'REFUND',
+    aggregateId: refund._id.toString(),
+    eventType: 'REFUND_CREATED',
+    payload: {
+      refundId: refund._id.toString(),
+      paymentId: payment._id.toString(),
+      amount: refundAmount,
+      processorPaymentId: refund.processorPaymentId,
+    },
+    status: 'PENDING',
+  });
+
+  // 5. Enqueue BullMQ job
+  await refundQueue.add(
+    'process-refund',
+    { refundId: refund._id.toString() },
+    { jobId: `refund_${refund._id}` }
+  );
+
+  return refund;
+}
+
+export async function getRefundById(refundId, merchantId) {
+  return await Refund.findOne({ _id: refundId, merchantId });
+}
+
+export async function getRefundsForPayment(paymentId, merchantId) {
+  return await Refund.find({ paymentId, merchantId }).sort({ createdAt: -1 });
 }
 ```
 
@@ -322,7 +304,7 @@ import { redisClient } from '../config/redis.js';
 import { razorpayClient } from '../config/razorpay.js';
 import { Refund } from '../modules/refunds/refund.model.js';
 import { Payment } from '../modules/payments/payment.model.js';
-import { LedgerService } from '../modules/ledger/ledger.service.js';
+import { recordDebit } from '../modules/ledger/ledger.service.js';
 import { webhookQueue } from '../queues/webhook.queue.js'; // From Phase 7
 import { REFUND_QUEUE_NAME } from '../queues/refund.queue.js';
 
@@ -364,7 +346,7 @@ export const refundWorker = new Worker(
       await refund.save();
 
       // 3. Record Immutable Ledger DEBIT entry (Reverses collected funds)
-      await LedgerService.recordDebit({
+      await recordDebit({
         merchantId: refund.merchantId,
         paymentId: refund.paymentId,
         refundId: refund._id,
@@ -432,13 +414,13 @@ export const refundWorker = new Worker(
 
 ---
 
-### Step 6: Add Ledger Debit Method (`src/modules/ledger/ledger.service.js`)
+### Step 6: Add Ledger Debit Function (`src/modules/ledger/ledger.service.js`)
 
-Ensure [src/modules/ledger/ledger.service.js](file:///d:/Backend/Backend%20Projects/Distributed%20Payment%20Gateway/backend/src/modules/ledger/ledger.service.js) includes the `recordDebit` helper:
+Ensure `src/modules/ledger/ledger.service.js` includes the `recordDebit` helper function:
 
 ```javascript
-// Inside LedgerService class:
-static async recordDebit({ merchantId, paymentId, refundId, amount, currency, description }) {
+// Inside src/modules/ledger/ledger.service.js:
+export async function recordDebit({ merchantId, paymentId, refundId, amount, currency, description }) {
   const existing = await LedgerEntry.findOne({ refundId, type: 'DEBIT' });
   if (existing) {
     return existing;
@@ -463,55 +445,57 @@ static async recordDebit({ merchantId, paymentId, refundId, amount, currency, de
 #### Controller: `src/modules/refunds/refund.controller.js`
 
 ```javascript
-import { RefundService } from './refund.service.js';
+import {
+  createRefund as createRefundService,
+  getRefundById,
+  getRefundsForPayment,
+} from './refund.service.js';
 
-export class RefundController {
-  static async createRefund(req, res) {
-    try {
-      const { paymentId, amount, reason } = req.body;
+export async function createRefund(req, res) {
+  try {
+    const { paymentId, amount, reason } = req.body;
 
-      if (!paymentId) {
-        return res.status(400).json({ error: 'paymentId is required.' });
-      }
-
-      const refund = await RefundService.createRefund({
-        merchantId: req.merchant._id,
-        paymentId,
-        amount,
-        reason,
-      });
-
-      return res.status(202).json({
-        message: 'Refund initiated successfully',
-        refund,
-      });
-    } catch (error) {
-      const statusCode = error.statusCode || 500;
-      return res.status(statusCode).json({
-        error: error.message || 'Internal server error',
-      });
+    if (!paymentId) {
+      return res.status(400).json({ error: 'paymentId is required.' });
     }
+
+    const refund = await createRefundService({
+      merchantId: req.merchant._id,
+      paymentId,
+      amount,
+      reason,
+    });
+
+    return res.status(202).json({
+      message: 'Refund initiated successfully',
+      refund,
+    });
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      error: error.message || 'Internal server error',
+    });
   }
+}
 
-  static async getRefund(req, res) {
-    try {
-      const refund = await RefundService.getRefundById(req.params.id, req.merchant._id);
-      if (!refund) {
-        return res.status(404).json({ error: 'Refund not found' });
-      }
-      return res.json({ refund });
-    } catch (error) {
-      return res.status(500).json({ error: 'Failed to retrieve refund' });
+export async function getRefund(req, res) {
+  try {
+    const refund = await getRefundById(req.params.id, req.merchant._id);
+    if (!refund) {
+      return res.status(404).json({ error: 'Refund not found' });
     }
+    return res.json({ refund });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to retrieve refund' });
   }
+}
 
-  static async listPaymentRefunds(req, res) {
-    try {
-      const refunds = await RefundService.getRefundsForPayment(req.params.paymentId, req.merchant._id);
-      return res.json({ refunds });
-    } catch (error) {
-      return res.status(500).json({ error: 'Failed to retrieve refunds' });
-    }
+export async function listPaymentRefunds(req, res) {
+  try {
+    const refunds = await getRefundsForPayment(req.params.paymentId, req.merchant._id);
+    return res.json({ refunds });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to retrieve refunds' });
   }
 }
 ```
@@ -520,20 +504,20 @@ export class RefundController {
 
 ```javascript
 import { Router } from 'express';
-import { RefundController } from './refund.controller.js';
+import { createRefund, getRefund, listPaymentRefunds } from './refund.controller.js';
 import { authenticateApiKey } from '../../middleware/auth.js';
-import { idempotencyMiddleware } from '../../middleware/idempotency.js';
+import { idempotency } from '../../middleware/idempotency.js';
 
 const router = Router();
 
 // Create Refund (Requires API Key & Idempotency Header)
-router.post('/', authenticateApiKey, idempotencyMiddleware, RefundController.createRefund);
+router.post('/', authenticateApiKey, idempotency(), createRefund);
 
 // Get single refund by ID
-router.get('/:id', authenticateApiKey, RefundController.getRefund);
+router.get('/:id', authenticateApiKey, getRefund);
 
 // Get all refunds for a specific payment
-router.get('/payment/:paymentId', authenticateApiKey, RefundController.listPaymentRefunds);
+router.get('/payment/:paymentId', authenticateApiKey, listPaymentRefunds);
 
 export default router;
 ```
@@ -628,7 +612,7 @@ curl -i -X POST http://localhost:3000/v1/refunds \
 
 ## Production Checklist for Phase 9
 - [ ] Refunds reject non-`SUCCEEDED` payments.
-- [ ] Race conditions & double-refunding prevented by MongoDB transactional bounds.
+- [ ] Race conditions & double-refunding prevented by atomic balance validations.
 - [ ] BullMQ asynchronously contacts Razorpay's refund API with exponential backoff.
 - [ ] Successful refunds write an immutable `DEBIT` entry into the financial Ledger.
 - [ ] Webhook triggers notify the merchant on refund completion (`refund.succeeded`).

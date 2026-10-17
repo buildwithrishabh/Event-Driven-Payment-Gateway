@@ -1,5 +1,6 @@
 import { OutboxEvent } from "../modules/payments/outbox.model.js";
 import { paymentQueue } from "../queues/payment.queue.js";
+import { refundQueue } from "../queues/refund.queue.js";
 
 let isRunning = false;
 
@@ -26,6 +27,14 @@ export async function processOutboxBatch() {
           {
             jobId: `pay_${event.payload.paymentId}`, // Deduplication key in BullMq
           },
+        );
+        event.status = "PROCESSED";
+        await event.save();
+      } else if (event.eventType === "REFUND_CREATED") {
+        await refundQueue.add(
+          "process-refund",
+          { refundId: event.payload.refundId },
+          { jobId: `refund_${event.payload.refundId}` },
         );
         event.status = "PROCESSED";
         await event.save();

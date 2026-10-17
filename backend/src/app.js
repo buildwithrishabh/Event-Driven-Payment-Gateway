@@ -12,9 +12,11 @@ import ledgerRoutes from "./modules/ledger/ledger.routes.js";
 import { startOutboxRelay } from "./workers/outbox.relay.js";
 import "./workers/payment.worker.js";
 import "./workers/webhook.worker.js";
+import "./workers/refund.worker.js";
 import webhookRoutes from "./modules/webhooks/webhook.routes.js";
 import { startReconciliationWorker } from "./workers/reconciliation.worker.js";
 import checkoutRoutes from "./modules/checkout/checkout.routes.js";
+import refundRoutes from "./modules/refunds/refund.routes.js";
 
 const app = express();
 
@@ -52,6 +54,7 @@ app.use("/v1/payments", paymentRoutes);
 app.use("/v1/ledger", ledgerRoutes);
 app.use("/v1/webhooks", webhookRoutes);
 app.use("/v1/checkout", checkoutRoutes);
+app.use("/v1/refunds", refundRoutes);
 
 async function startServer() {
   await connectDB();

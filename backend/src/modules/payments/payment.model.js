@@ -55,6 +55,17 @@ const paymentSchema = new mongoose.Schema({
     workerId: { type: String, default: null },
     lockedAt: { type: Date, default: null },
   },
+  refundedAmount: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  refundStatus: {
+    type: String,
+    enum: ["NONE", "PARTIAL", "FULL"],
+    default: "NONE",
+    index: true,
+  },
 }, {
     timestamps: true
 });
