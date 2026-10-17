@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { CheckCircle2, CreditCard, ExternalLink, RefreshCw, Search, Send } from "lucide-react";
+import { CheckCircle2, CreditCard, ExternalLink, RefreshCw, RotateCcw, Search, Send } from "lucide-react";
 import { createPayment, getPayments } from "../lib/api.js";
 import { formatDateTime, formatMoney, generateIdempotencyKey, shortId, toMinorUnits } from "../lib/format.js";
-import { CURRENCIES, PAYMENT_STATUS_STYLES, statusStyle } from "../lib/constants.js";
+import { CURRENCIES, PAYMENT_STATUS_STYLES, PAYMENT_REFUND_STATUS_STYLES, statusStyle } from "../lib/constants.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useToast } from "../context/ToastContext.jsx";
 import { useFetch } from "../hooks/useFetch.js";
@@ -14,6 +14,7 @@ import Input from "../components/ui/Input.jsx";
 import Select from "../components/ui/Select.jsx";
 import CopyButton from "../components/ui/CopyButton.jsx";
 import { Card, CardBody, CardHeader } from "../components/ui/Card.jsx";
+import RefundModal from "../components/refunds/RefundModal.jsx";
 
 export default function PaymentsPage() {
   const { apiKey } = useAuth();
@@ -37,6 +38,7 @@ export default function PaymentsPage() {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [receipt, setReceipt] = useState(null);
+  const [refundPayment, setRefundPayment] = useState(null);
   const minorAmount = toMinorUnits(form.amount, form.currency);
 
   const filtered = useMemo(() => {
@@ -302,16 +304,42 @@ export default function PaymentsPage() {
                           {payment.customerEmail || "—"}
                         </td>
                         <td className="whitespace-nowrap px-5 py-3.5 text-xs font-semibold text-ink-900">
-                          {formatMoney(payment.amount, payment.currency)}
+                          <div>
+                            <span>{formatMoney(payment.amount, payment.currency)}</span>
+                            {payment.refundedAmount > 0 && (
+                              <span className="block text-[10px] font-normal text-rose-600">
+                                -{formatMoney(payment.refundedAmount, payment.currency)} ref
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-5 py-3.5">
-                          <span className={`chip ${status.className}`}>{status.label}</span>
+                          <div className="flex flex-col items-start gap-1">
+                            <span className={`chip ${status.className}`}>{status.label}</span>
+                            {payment.refundStatus && payment.refundStatus !== "NONE" && (
+                              <span className={`chip text-[10px] ${statusStyle(PAYMENT_REFUND_STATUS_STYLES, payment.refundStatus).className}`}>
+                                {statusStyle(PAYMENT_REFUND_STATUS_STYLES, payment.refundStatus).label}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="whitespace-nowrap px-5 py-3.5 text-xs text-ink-500">
                           {formatDateTime(payment.createdAt)}
                         </td>
                         <td className="px-5 py-3.5 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-3">
+                            {payment.status === "SUCCEEDED" &&
+                              payment.amount > (payment.refundedAmount || 0) && (
+                                <button
+                                  type="button"
+                                  onClick={() => setRefundPayment(payment)}
+                                  className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline"
+                                  title="Issue partial or full refund"
+                                >
+                                  <RotateCcw className="h-3 w-3" />
+                                  <span>Refund</span>
+                                </button>
+                              )}
                             {payment.status !== "SUCCEEDED" && (
                               <Link
                                 to={`/checkout/${payment.paymentId}`}
@@ -357,6 +385,14 @@ export default function PaymentsPage() {
           )}
         </CardBody>
       </Card>
+
+      {/* Refund Modal */}
+      <RefundModal
+        isOpen={Boolean(refundPayment)}
+        onClose={() => setRefundPayment(null)}
+        payment={refundPayment}
+        onSuccess={() => paymentsFetch.refresh()}
+      />
     </div>
   );
 }

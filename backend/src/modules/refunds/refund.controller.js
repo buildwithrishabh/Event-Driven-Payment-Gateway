@@ -1,6 +1,7 @@
 import {
   createRefund as createRefundService,
   getRefundById,
+  getAllRefunds,
   getRefundsForPayment,
 } from "./refund.service.js";
 
@@ -52,5 +53,21 @@ export async function listPaymentRefunds(req, res) {
     return res.json({ refunds });
   } catch (error) {
     return res.status(500).json({ error: "Failed to retrieve refunds" });
+  }
+}
+
+
+export async function listRefunds(req, res) {
+  try {
+    const { status, page, limit, search } = req.query;
+    const result = await getAllRefunds(req.merchant._id, {
+      status,
+      page,
+      limit,
+      search,
+    });
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: "Failed to list refunds" });
   }
 }

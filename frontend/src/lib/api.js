@@ -166,6 +166,58 @@ export function getLedgerEntries(apiKey, params = {}) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Refund endpoints                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * POST /v1/refunds — initiate a refund (requires x-api-key + Idempotency-Key).
+ * @param {{ paymentId: string, amount?: number, reason?: string }} payload
+ * @param {string} apiKey
+ * @param {string} idempotencyKey
+ */
+export function createRefund(payload, apiKey, idempotencyKey) {
+  return request("/v1/refunds", {
+    method: "POST",
+    body: payload,
+    apiKey,
+    idempotencyKey,
+  });
+}
+
+/**
+ * GET /v1/refunds/:id — fetch a single refund by ID for the authenticated merchant.
+ * @param {string} id
+ * @param {string} apiKey
+ */
+export function getRefund(id, apiKey) {
+  return request(`/v1/refunds/${encodeURIComponent(id)}`, { apiKey });
+}
+
+/**
+ * GET /v1/refunds/payment/:paymentId — fetch all refunds for a specific payment.
+ * @param {string} paymentId
+ * @param {string} apiKey
+ */
+export function getPaymentRefunds(paymentId, apiKey) {
+  return request(`/v1/refunds/payment/${encodeURIComponent(paymentId)}`, { apiKey });
+}
+
+/**
+ * GET /v1/refunds — list all refunds for the authenticated merchant.
+ * @param {string} apiKey
+ * @param {{ status?: string, search?: string, page?: number, limit?: number }} [params]
+ */
+export function getRefunds(apiKey, params = {}) {
+  const queryParams = new URLSearchParams();
+  if (params.status) queryParams.set("status", params.status);
+  if (params.search) queryParams.set("search", params.search);
+  if (params.page) queryParams.set("page", String(params.page));
+  if (params.limit) queryParams.set("limit", String(params.limit));
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : "";
+  return request(`/v1/refunds${query}`, { apiKey });
+}
+
+/* -------------------------------------------------------------------------- */
 /* Public Checkout Session Endpoints (Customer-Facing / No API Key required)  */
 /* -------------------------------------------------------------------------- */
 

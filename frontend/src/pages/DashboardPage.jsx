@@ -7,6 +7,7 @@ import {
   Plus,
   Receipt,
   RefreshCw,
+  RotateCcw,
   TrendingUp,
   Wallet,
   Webhook,
@@ -244,6 +245,16 @@ export default function DashboardPage() {
           <Card>
             <CardHeader title="Developer shortcuts" />
             <CardBody className="space-y-2 p-3">
+              <Link
+                to="/refunds"
+                className="flex items-center justify-between rounded-lg p-2 text-xs text-ink-700 transition hover:bg-ink-50"
+              >
+                <div className="flex items-center gap-2">
+                  <RotateCcw className="h-3.5 w-3.5 text-rose-600" />
+                  <span>Refunds & Reversals</span>
+                </div>
+                <ArrowRight className="h-3 w-3 text-ink-400" />
+              </Link>
               <Link
                 to="/api"
                 className="flex items-center justify-between rounded-lg p-2 text-xs text-ink-700 transition hover:bg-ink-50"

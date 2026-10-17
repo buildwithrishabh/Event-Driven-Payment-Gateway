@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Search,
   CreditCard,
+  RotateCcw,
   BookText,
   Webhook,
   Code2,
@@ -17,6 +18,7 @@ import { formatMoney, shortId, timeAgo } from "../../lib/format.js";
 const QUICK_PAGES = [
   { title: "Overview", path: "/", icon: LayoutDashboard },
   { title: "Payments", path: "/payments", icon: CreditCard },
+  { title: "Refunds", path: "/refunds", icon: RotateCcw },
   { title: "Ledger", path: "/ledger", icon: BookText },
   { title: "Webhooks", path: "/webhooks", icon: Webhook },
   { title: "API reference", path: "/api", icon: Code2 },

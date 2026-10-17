@@ -22,6 +22,29 @@ export const PAYMENT_STATUS_STYLES = {
   CANCELLED: { label: "Cancelled", className: "border-ink-200 bg-ink-100 text-ink-500" },
 };
 
+/* -------------------------------------------------------------------------- */
+/* Refund statuses (mirrors backend Refund model enum)                        */
+/* -------------------------------------------------------------------------- */
+export const REFUND_STATUS = {
+  PENDING: "PENDING",
+  PROCESSING: "PROCESSING",
+  SUCCEEDED: "SUCCEEDED",
+  FAILED: "FAILED",
+};
+
+export const REFUND_STATUS_STYLES = {
+  PENDING: { label: "Pending", className: "border-amber-200/70 bg-amber-50 text-amber-700" },
+  PROCESSING: { label: "Processing", className: "border-sky-200/70 bg-sky-50 text-sky-700" },
+  SUCCEEDED: { label: "Succeeded", className: "border-emerald-200/70 bg-emerald-50 text-emerald-700" },
+  FAILED: { label: "Failed", className: "border-rose-200/70 bg-rose-50 text-rose-700" },
+};
+
+export const PAYMENT_REFUND_STATUS_STYLES = {
+  NONE: { label: "Not Refunded", className: "border-ink-200/80 bg-ink-100 text-ink-600" },
+  PARTIAL: { label: "Partially Refunded", className: "border-amber-200/70 bg-amber-50 text-amber-700" },
+  FULL: { label: "Fully Refunded", className: "border-purple-200/70 bg-purple-50 text-purple-700" },
+};
+
 export const MERCHANT_STATUS_STYLES = {
   ACTIVE: { label: "Active", className: "border-emerald-200/70 bg-emerald-50 text-emerald-700" },
   SUSPENDED: { label: "Suspended", className: "border-rose-200/70 bg-rose-50 text-rose-700" },
@@ -53,6 +76,7 @@ export const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD"];
 export const NAV_ITEMS = [
   { to: "/", label: "Overview", icon: "LayoutDashboard", end: true },
   { to: "/payments", label: "Payments", icon: "CreditCard" },
+  { to: "/refunds", label: "Refunds", icon: "RotateCcw" },
   { to: "/ledger", label: "Ledger", icon: "BookText" },
   { to: "/webhooks", label: "Webhooks", icon: "Webhook" },
   { to: "/api", label: "API Reference", icon: "Code2" },
@@ -132,6 +156,41 @@ export const IMPLEMENTED_ENDPOINTS = [
   },
   {
     method: "POST",
+    path: "/v1/refunds",
+    auth: "x-api-key + Idempotency-Key",
+    summary: "Initiate a partial or full refund for a succeeded payment. Asynchronously processed via BullMQ.",
+    sample: `curl -X POST http://localhost:3000/v1/refunds \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: <YOUR_API_KEY>" \\
+  -H "Idempotency-Key: refund_req_101" \\
+  -d '{"paymentId":"<PAYMENT_ID>","amount":1000,"reason":"requested_by_customer"}'`,
+  },
+  {
+    method: "GET",
+    path: "/v1/refunds/:id",
+    auth: "x-api-key",
+    summary: "Get single refund status and details by refund ID.",
+    sample: `curl http://localhost:3000/v1/refunds/<REFUND_ID> \\
+  -H "x-api-key: <YOUR_API_KEY>"`,
+  },
+  {
+    method: "GET",
+    path: "/v1/refunds/payment/:paymentId",
+    auth: "x-api-key",
+    summary: "Get all refund attempts and statuses for a specific payment ID.",
+    sample: `curl http://localhost:3000/v1/refunds/payment/<PAYMENT_ID> \\
+  -H "x-api-key: <YOUR_API_KEY>"`,
+  },
+  {
+    method: "GET",
+    path: "/v1/refunds",
+    auth: "x-api-key",
+    summary: "List all merchant refunds with pagination, status filtering, and search.",
+    sample: `curl "http://localhost:3000/v1/refunds?limit=20&page=1" \\
+  -H "x-api-key: <YOUR_API_KEY>"`,
+  },
+  {
+    method: "POST",
     path: "/v1/webhooks/razorpay",
     auth: "Razorpay HMAC signature",
     summary: "Receive Razorpay payment events. This endpoint is called by Razorpay, not the browser.",
@@ -148,11 +207,6 @@ export const PLANNED_ENDPOINTS = {
     method: "POST",
     path: "/v1/payments/:id/cancel",
     purpose: "Cancel a payment still in CREATED.",
-  },
-  paymentRefund: {
-    method: "POST",
-    path: "/v1/payments/:id/refund",
-    purpose: "Initiate a refund and append a DEBIT ledger entry.",
   },
   ledgerBalances: {
     method: "GET",

@@ -97,9 +97,57 @@ export async function createRefund({ merchantId, paymentId, amount, reason }) {
 }
 
 export async function getRefundById(refundId, merchantId) {
-  return await Refund.findOne({ _id: refundId, merchantId });
+  if (mongoose.Types.ObjectId.isValid(refundId)) {
+    return await Refund.findOne({ _id: refundId, merchantId });
+  }
+  return await Refund.findOne({ processorRefundId: refundId, merchantId });
 }
 
 export async function getRefundsForPayment(paymentId, merchantId) {
   return await Refund.find({ paymentId, merchantId }).sort({ createdAt: -1 });
+}
+
+export async function getAllRefunds(
+  merchantId,
+  { status, page = 1, limit = 20, search } = {},
+) {
+  const query = { merchantId };
+  if (status) {
+    query.status = status.toUpperCase();
+  }
+  if (search) {
+    const s = search.trim();
+    if (mongoose.Types.ObjectId.isValid(s)) {
+      query.$or = [{ _id: s }, { paymentId: s }];
+    } else {
+      query.$or = [
+        { processorRefundId: { $regex: s, $options: "i" } },
+        { processorPaymentId: { $regex: s, $options: "i" } },
+        { reason: { $regex: s, $options: "i" } },
+      ];
+    }
+  }
+
+  const pageNum = Math.max(1, parseInt(page, 10));
+  const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10)));
+  const skip = (pageNum - 1) * limitNum;
+
+  const [refunds, total] = await Promise.all([
+    Refund.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean(),
+    Refund.countDocuments(query),
+  ]);
+
+  return {
+    data: refunds,
+    pagination: {
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    },
+  };
 }

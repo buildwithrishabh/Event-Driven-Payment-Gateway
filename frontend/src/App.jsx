@@ -8,6 +8,7 @@ import ConnectPage from "./pages/ConnectPage.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import PaymentsPage from "./pages/PaymentsPage.jsx";
 import PaymentDetailPage from "./pages/PaymentDetailPage.jsx";
+import RefundsPage from "./pages/RefundsPage.jsx";
 import LedgerPage from "./pages/LedgerPage.jsx";
 import WebhooksPage from "./pages/WebhooksPage.jsx";
 import ApiReferencePage from "./pages/ApiReferencePage.jsx";
@@ -59,6 +60,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="payments" element={<PaymentsPage />} />
           <Route path="payments/:id" element={<PaymentDetailPage />} />
+          <Route path="refunds" element={<RefundsPage />} />
           <Route path="ledger" element={<LedgerPage />} />
           <Route path="webhooks" element={<WebhooksPage />} />
           <Route path="api" element={<ApiReferencePage />} />

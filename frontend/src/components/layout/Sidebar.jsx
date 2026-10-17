@@ -1,9 +1,9 @@
 import { NavLink } from "react-router-dom";
-import { BookText, Code2, CreditCard, LayoutDashboard, Settings, Webhook, X } from "lucide-react";
+import { BookText, Code2, CreditCard, LayoutDashboard, RotateCcw, Settings, Webhook, X } from "lucide-react";
 import { NAV_ITEMS, MERCHANT_STATUS_STYLES, statusStyle } from "../../lib/constants.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 
-const ICONS = { LayoutDashboard, CreditCard, BookText, Webhook, Code2, Settings };
+const ICONS = { LayoutDashboard, CreditCard, RotateCcw, BookText, Webhook, Code2, Settings };
 
 function NavItem({ item, onNavigate }) {
   const Icon = ICONS[item.icon] || Settings;
