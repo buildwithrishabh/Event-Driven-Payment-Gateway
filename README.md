@@ -153,7 +153,6 @@ flowchart TD
 │   │   └── App.jsx              # Routes configuration
 │   ├── .env.example
 │   └── package.json
-├── phases/                      # 9-phase step-by-step engineering implementation guides
 ├── ARCHITECTURE.md              # Deep dive architectural documentation & failure modes
 └── README.md                    # Project documentation
 ```

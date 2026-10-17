@@ -372,5 +372,4 @@ The checkout system exposes public endpoints (`/v1/checkout/*`) that power the c
 
 ## 📖 Related Documentation
 - [README.md](./README.md) — Quickstart, environment setup, and API reference
-- [Phase Implementation Guides](./phases/README.md) — 9-phase guided breakdown of each architectural layer
 - [Frontend README](./frontend/README.md) — Gateway Console dashboard & checkout UI guide
