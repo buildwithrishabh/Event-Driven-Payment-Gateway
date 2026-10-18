@@ -3,6 +3,8 @@ import { redisClient } from "../config/redis.js";
 import { Merchant } from "../modules/merchants/merchant.model.js";
 import { WebhookDelivery } from "../modules/webhooks/webhook.model.js";
 import crypto from "crypto";
+import { logger } from "../config/logger.js";
+import { webhookCounter } from "../config/metrics.js";
 
 export const webhookWorker = new Worker(
   "webhook-delivery",
@@ -11,15 +13,15 @@ export const webhookWorker = new Worker(
 
     const merchant = await Merchant.findById(merchantId);
     if (!merchant || !merchant.webhookUrl) {
-      console.log(
-        `Merchant ${merchantId} has no webhook URL configured. Skipping.`,
+      logger.info(
+        `Merchant ${merchantId} has no webhook URL configured. Skipping.`
       );
       return;
     }
 
     if (!merchant.webhookSecret) {
-      console.warn(
-        `Merchant ${merchantId} has no webhookSecret configured. Skipping.`,
+      logger.warn(
+        `Merchant ${merchantId} has no webhookSecret configured. Skipping.`
       );
       return;
     }
@@ -38,8 +40,8 @@ export const webhookWorker = new Worker(
       "x-event": eventType,
     };
 
-    console.log(
-      `🚀 Sending webhook [${eventType}] to ${merchant.webhookUrl} (Attempt ${job.attemptsMade + 1})`,
+    logger.info(
+      `🚀 Sending webhook [${eventType}] to ${merchant.webhookUrl} (Attempt ${job.attemptsMade + 1})`
     );
 
     let responseStatus = null;
@@ -69,16 +71,19 @@ export const webhookWorker = new Worker(
       });
 
       if (!response.ok) {
+        webhookCounter.inc({ status: "FAILED" });
         throw new Error(
           `Merchant webhook responded with HTTP ${response.status}`,
         );
       }
 
-      console.log(
+      webhookCounter.inc({ status: "SUCCESS" });
+      logger.info(
         `✅ Webhook delivered successfully to ${merchant.webhookUrl}`,
       );
     } catch (err) {
       if (responseStatus === null) {
+        webhookCounter.inc({ status: "FAILED" });
         try {
           await WebhookDelivery.create({
             merchantId,
@@ -93,13 +98,13 @@ export const webhookWorker = new Worker(
             status: "FAILED",
           });
         } catch (dbErr) {
-          console.error("Failed to record webhook delivery error in DB:", dbErr);
+          logger.error("Failed to record webhook delivery error in DB:", { error: dbErr.message });
         }
       }
 
-      console.error(
-        `❌ Webhook delivery error (Attempt ${job.attemptsMade + 1}):`,
-        err.message,
+
+      logger.error(
+        `❌ Webhook delivery error (Attempt ${job.attemptsMade + 1}): ${err.message}`,
       );
       throw err; // BullMQ retries automatically with exponential backoff
     }
@@ -111,9 +116,9 @@ export const webhookWorker = new Worker(
 );
 
 webhookWorker.on("completed", (job) => {
-  console.log(`✅ Webhook job ${job.id} completed successfully`);
+  logger.info(`✅ Webhook job ${job.id} completed successfully`);
 });
 
 webhookWorker.on("failed", (job, err) => {
-  console.error(`❌ Webhook job ${job?.id} failed:`, err.message);
+  logger.error(`❌ Webhook job ${job?.id} failed: ${err.message}`);
 });

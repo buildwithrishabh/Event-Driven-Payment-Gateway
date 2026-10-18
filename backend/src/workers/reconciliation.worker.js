@@ -2,9 +2,10 @@ import { Payment } from "../modules/payments/payment.model.js";
 import { recordCredit } from "../modules/ledger/ledger.service.js";
 import { webhookQueue } from "../queues/webhook.queue.js";
 import { fetchOrderPayments } from "../modules/processors/razorpay.processor.js";
+import { logger } from "../config/logger.js";
 
 export async function runReconciliationSweep() {
-  console.log("🔍 Running Reconciliation sweep for stuck payments...");
+  logger.info("🔍 Running Reconciliation sweep for stuck payments...");
 
   const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
 
@@ -15,11 +16,11 @@ export async function runReconciliationSweep() {
   });
 
   if (stuckPayments.length === 0) {
-    console.log("✅ No stuck payments found.");
+    logger.info("✅ No stuck payments found.");
     return;
   }
 
-  console.log(
+  logger.warn(
     `⚠️ Found ${stuckPayments.length} stuck payments. Checking against Razorpay API...`,
   );
 
@@ -33,7 +34,7 @@ export async function runReconciliationSweep() {
       const successfulCharge = items.find((p) => p.status === "captured");
 
       if (successfulCharge) {
-        console.log(
+        logger.info(
           `💡 Razorpay verified payment ${successfulCharge.id} is captured! Reconciling to SUCCEEDED.`,
         );
 
@@ -65,7 +66,7 @@ export async function runReconciliationSweep() {
         // check if there are only failed attempts older than 10 minutes
         const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
         if (payment.updatedAt < tenMinutesAgo) {
-          console.log(
+          logger.info(
             `⌛ Payment ${payment._id} expired without successful capture. Marking as FAILED.`,
           );
           payment.status = "FAILED";
@@ -85,15 +86,14 @@ export async function runReconciliationSweep() {
         }
       }
     } catch (error) {
-      console.error(
-        `Failed to reconcile payment ${payment._id}:`,
-        error.message,
+      logger.error(
+        `Failed to reconcile payment ${payment._id}: ${error.message}`,
       );
     }
   }
 }
 
 export function startReconciliationWorker(intervalMs = 60000) {
-  console.log(`⏱️ Reconciliation worker active (running every ${intervalMs / 1000}s)`);
+  logger.info(`⏱️ Reconciliation worker active (running every ${intervalMs / 1000}s)`);
   return setInterval(runReconciliationSweep, intervalMs);
 }

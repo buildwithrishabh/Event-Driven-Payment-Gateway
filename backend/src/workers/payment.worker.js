@@ -3,6 +3,8 @@ import { redisClient } from "../config/redis.js";
 import { Payment } from "../modules/payments/payment.model.js";
 import { createOrder } from "../modules/processors/razorpay.processor.js";
 import os from "os";
+import { paymentCounter } from "../config/metrics.js";
+import { logger } from "../config/logger.js";
 
 const workerId = `worker_${os.hostname()}_${process.pid}`;
 
@@ -10,7 +12,7 @@ export const paymentWorker = new Worker(
   "payment-process",
   async (job) => {
     const { paymentId, amount, currency } = job.data;
-    console.log(`[${workerId}] Processing payment: ${paymentId}`);
+    logger.info(`[${workerId}] Processing payment: ${paymentId}`);
 
     // 1. ATOMIC CLAIM: Only claim if status is still 'CREATED'
     const payment = await Payment.findOneAndUpdate(
@@ -31,7 +33,7 @@ export const paymentWorker = new Worker(
     );
 
     if (!payment) {
-      console.log(
+      logger.info(
         `[${workerId}] Payment ${paymentId} already claimed or processed. Skipping.`,
       );
       return;
@@ -55,13 +57,19 @@ export const paymentWorker = new Worker(
       payment.processingLock = null;
       await payment.save();
 
-      console.log(
+      // Razorpay Order create hone ke baad (Real success)
+      paymentCounter.inc({ status: "SUCCESS", currency });
+
+      logger.info(
         `[${workerId}] Razorpay Order created: ${razorpayOrder.orderId} for Payment ${paymentId}`,
       );
     } catch (err) {
-      console.error(
-        `[${workerId}] Razorpay call failed for payment ${paymentId}:`,
-        err.message,
+      
+      // Error aane par:
+      paymentCounter.inc({ status: "FAILED", currency: currency || "INR" });
+
+      logger.error(
+        `[${workerId}] Razorpay call failed for payment ${paymentId}: ${err.message}`,
       );
 
       // Release lock for BullMQ retry
@@ -79,9 +87,9 @@ export const paymentWorker = new Worker(
 );
 
 paymentWorker.on("completed", (job) => {
-  console.log(`✅ Job ${job.id} completed`);
+  logger.info(`✅ Job ${job.id} completed`);
 });
 
 paymentWorker.on("failed", (job, err) => {
-  console.error(`❌ Job ${job?.id} failed:`, err.message);
+  logger.error(`❌ Job ${job?.id} failed: ${err.message}`);
 });

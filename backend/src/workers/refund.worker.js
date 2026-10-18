@@ -6,12 +6,14 @@ import { Payment } from "../modules/payments/payment.model.js";
 import { recordDebit } from "../modules/ledger/ledger.service.js";
 import { webhookQueue } from "../queues/webhook.queue.js";
 import { REFUND_QUEUE_NAME } from "../queues/refund.queue.js";
+import { refundCounter } from "../config/metrics.js";
+import { logger } from "../config/logger.js";
 
 export const refundWorker = new Worker(
   REFUND_QUEUE_NAME,
   async (job) => {
     const { refundId } = job.data;
-    console.log(`💸 Processing refund job: ${refundId}`);
+    logger.info(`💸 Processing refund job: ${refundId}`);
 
     // Atomically claim refund to avoid duplicate processing
     const refund = await Refund.findOneAndUpdate(
@@ -21,7 +23,7 @@ export const refundWorker = new Worker(
     );
 
     if (!refund) {
-      console.warn(`Refund ${refundId} already processed or does not exist`);
+      logger.warn(`Refund ${refundId} already processed or does not exist`);
       return;
     }
 
@@ -43,6 +45,7 @@ export const refundWorker = new Worker(
       refund.status = "SUCCEEDED";
       refund.processorRefundId = razorpayResponse.id;
       await refund.save();
+      refundCounter.inc({ status: "SUCCEEDED" });
 
       // 3. Record Immutable Ledger Debit entry (Reverses collected funds)
       await recordDebit({
@@ -54,7 +57,7 @@ export const refundWorker = new Worker(
         description: `Refund executed for payment ${refund.paymentId}`,
       });
 
-      console.log(
+      logger.info(
         `✅ Refund ${refund._id} SUCCEEDED (Razorpay ID: ${razorpayResponse.id})`,
       );
 
@@ -74,10 +77,11 @@ export const refundWorker = new Worker(
         });
       }
     } catch (error) {
-      console.error(`❌ Refund ${refund._id} failed:`, error?.message || error);
+      logger.error(`❌ Refund ${refund._id} failed: ${error?.message || error}`);
 
       // Rollback payment.refundedAmount in DB on terminal failure
       if (job.attemptsMade >= (job.opts.attempts || 5)) {
+        refundCounter.inc({ status: "FAILED" });
         refund.status = "FAILED";
         refund.failureReason =
           error?.error?.description ||

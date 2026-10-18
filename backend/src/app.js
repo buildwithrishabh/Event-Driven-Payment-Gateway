@@ -9,6 +9,7 @@ if (process.env.NODE_ENV !== "production") {
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
+import { register, httpRequestDuration, updateQueueMetrics } from "./config/metrics.js";
 import { connectDB } from "./config/db.js";
 import { redisClient } from "./config/redis.js";
 import { logger } from "./config/logger.js";
@@ -59,6 +60,29 @@ app.get("/health", async (req, res) => {
       redis: redisStatus,
     },
   });
+});
+
+app.use((req, res, next) => {
+  if (req.path === "/metrics" || req.path === "/health") {
+    return next();
+  }
+
+  const end = httpRequestDuration.startTimer();
+  res.on("finish", () => {
+    const route = req.route ? req.baseUrl + req.route.path : req.path;
+    end({ method: req.method, route, status_code: res.statusCode });
+  });
+  next();
+});
+
+app.get("/metrics", async (req, res) => {
+  try {
+    await updateQueueMetrics();
+    res.set("Content-Type", register.contentType);
+    res.end(await register.metrics());
+  } catch (err) {
+    res.status(500).end(err.message);
+  }
 });
 
 app.use("/v1/merchants", merchantsRoutes);

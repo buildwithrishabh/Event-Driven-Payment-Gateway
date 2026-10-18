@@ -1,6 +1,8 @@
 import { OutboxEvent } from "../modules/payments/outbox.model.js";
 import { paymentQueue } from "../queues/payment.queue.js";
 import { refundQueue } from "../queues/refund.queue.js";
+import { outboxLagGauge } from "../config/metrics.js";
+import { logger } from "../config/logger.js";
 
 let isRunning = false;
 
@@ -9,6 +11,12 @@ export async function processOutboxBatch() {
   isRunning = true;
 
   try {
+    // Update Prometheus Outbox lag Gauge
+    const pendingCount = await OutboxEvent.countDocuments({
+      status: "PENDING",
+    });
+    outboxLagGauge.set(pendingCount);
+
     const events = await OutboxEvent.find({ status: "PENDING" })
       .sort({ createdAt: 1 })
       .limit(20);
@@ -41,9 +49,8 @@ export async function processOutboxBatch() {
           await event.save();
         }
       } catch (eventError) {
-        console.error(
-          `Failed to relay event ${event._id}:`,
-          eventError.message,
+        logger.error(
+          `Failed to relay event ${event._id}: ${eventError.message}`,
         );
         event.retryCount = (event.retryCount || 0) + 1;
         if (event.retryCount >= 3) {
@@ -53,13 +60,13 @@ export async function processOutboxBatch() {
       }
     }
   } catch (error) {
-    console.error("Outbox Relay polling error:", error);
+    logger.error(`Outbox Relay polling error: ${error.message || error}`);
   } finally {
     isRunning = false;
   }
 }
 
 export function startOutboxRelay(intervalMs = 1500) {
-  console.log("📬 Outbox Relay started (polling every 1.5s)");
+  logger.info("📬 Outbox Relay started (polling every 1.5s)");
   return setInterval(processOutboxBatch, intervalMs);
 }
