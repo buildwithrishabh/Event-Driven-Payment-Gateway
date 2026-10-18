@@ -1,254 +1,273 @@
-# 🏛 System Architecture & Engineering Deep Dive
+# 🏛️ Distributed Systems Architecture & Engineering Specification
 
-> An architectural specification of the distributed failure handling, transactional guarantees, asynchronous processing, idempotency controls, and double-entry ledger mechanics powering the **Event-Driven Payment Gateway & Ledger Engine**.
+> **An in-depth technical specification of the distributed failure handling, transactional guarantees, asynchronous processing, idempotency controls, and double-entry ledger mechanics powering the Event-Driven Payment Gateway.**
 
 ---
 
 ## 📑 Table of Contents
 
-- [1. High-Level Architecture Overview](#1-high-level-architecture-overview)
-- [2. System Architecture Diagram](#2-system-architecture-diagram)
-- [3. Major System Components](#3-major-system-components)
-  - [3.1 API Gateway & Routing Layer](#31-api-gateway--routing-layer)
-  - [3.2 Authentication & Key Verification](#32-authentication--key-verification)
-  - [3.3 Distributed Idempotency Layer](#33-distributed-idempotency-layer)
-  - [3.4 Transactional Outbox Pattern](#34-transactional-outbox-pattern)
-  - [3.5 Message Queues & Worker Concurrency](#35-message-queues--worker-concurrency)
-  - [3.6 Double-Entry Append-Only Financial Ledger](#36-double-entry-append-only-financial-ledger)
-  - [3.7 Asynchronous Refund Engine](#37-asynchronous-refund-engine)
-  - [3.8 Self-Healing Reconciliation Sweeper](#38-self-healing-reconciliation-sweeper)
-  - [3.9 Webhook Delivery & Cryptographic Verification](#39-webhook-delivery--cryptographic-verification)
-  - [3.10 Customer Checkout Engine](#310-customer-checkout-engine)
-- [4. End-to-End Data Flows](#4-end-to-end-data-flows)
-  - [Flow 1: Payment Ingestion & Outbox Relay](#flow-1-payment-ingestion--outbox-relay)
-  - [Flow 2: Payment Worker & Upstream Order Creation](#flow-2-payment-worker--upstream-order-creation)
-  - [Flow 3: Customer Checkout & Cryptographic Verification](#flow-3-customer-checkout--cryptographic-verification)
-  - [Flow 4: Inbound Razorpay Webhook Handling](#flow-4-inbound-razorpay-webhook-handling)
-  - [Flow 5: Asynchronous Refund Lifecycle](#flow-5-asynchronous-refund-lifecycle)
-  - [Flow 6: Autonomous Reconciliation Sweep](#flow-6-autonomous-reconciliation-sweep)
-  - [Flow 7: Outbound Webhook Delivery & Retries](#flow-7-outbound-webhook-delivery--retries)
-- [5. State Machines & Entity Lifecycles](#5-state-machines--entity-lifecycles)
-  - [Payment State Machine](#payment-state-machine)
-  - [Refund State Machine](#refund-state-machine)
-- [6. Distributed Failure Modes & Recovery Matrix](#6-distributed-failure-modes--recovery-matrix)
-- [7. Codebase Reference Map](#7-codebase-reference-map)
+1. [Executive Summary & Mental Model](#1-executive-summary--mental-model)
+2. [High-Level System Topology Diagram](#2-high-level-system-topology-diagram)
+3. [The 7 Core Architectural Pillars](#3-the-7-core-architectural-pillars)
+   - [Pillar 1: Two-Tier Distributed Idempotency](#pillar-1-two-tier-distributed-idempotency)
+   - [Pillar 2: Transactional Outbox Pattern](#pillar-2-transactional-outbox-pattern)
+   - [Pillar 3: Worker Concurrency & Atomic Task Claims](#pillar-3-worker-concurrency--atomic-task-claims)
+   - [Pillar 4: Immutable Double-Entry Financial Ledger](#pillar-4-immutable-double-entry-financial-ledger)
+   - [Pillar 5: Asynchronous Refund Engine with Compensating Rollbacks](#pillar-5-asynchronous-refund-engine-with-compensating-rollbacks)
+   - [Pillar 6: Self-Healing Reconciliation Engine](#pillar-6-self-healing-reconciliation-engine)
+   - [Pillar 7: Cryptographic Webhook Security (Inbound & Outbound)](#pillar-7-cryptographic-webhook-security-inbound--outbound)
+4. [End-to-End Execution Sequence Diagrams](#4-end-to-end-execution-sequence-diagrams)
+   - [Flow 1: Payment Ingestion & Fast API Return](#flow-1-payment-ingestion--fast-api-return)
+   - [Flow 2: Outbox Polling & Upstream Order Creation](#flow-2-outbox-polling--upstream-order-creation)
+   - [Flow 3: Customer Checkout & Cryptographic Signature Verification](#flow-3-customer-checkout--cryptographic-signature-verification)
+   - [Flow 4: Inbound Webhook Processing](#flow-4-inbound-webhook-processing)
+   - [Flow 5: Partial / Full Refund Lifecycle with Saga Rollback](#flow-5-partial--full-refund-lifecycle-with-saga-rollback)
+   - [Flow 6: Autonomous Reconciliation Sweep](#flow-6-autonomous-reconciliation-sweep)
+   - [Flow 7: Outbound Webhook Delivery with Exponential Backoff](#flow-7-outbound-webhook-delivery-with-exponential-backoff)
+5. [State Machines & Entity Lifecycles](#5-state-machines--entity-lifecycles)
+   - [Payment State Machine](#payment-state-machine)
+   - [Refund State Machine](#refund-state-machine)
+6. [Distributed Failure Modes & Disaster Recovery Matrix](#6-distributed-failure-modes--disaster-recovery-matrix)
+7. [Codebase Reference Map](#7-codebase-reference-map)
 
 ---
 
-## 1. High-Level Architecture Overview
+## 1. Executive Summary & Mental Model
 
-In high-volume payment processing, naive architectures that perform third-party HTTP requests inside synchronous web requests suffer from three critical distributed systems problems:
+### The 3-Tier Mental Model
+To understand this system on the first read, picture it as three distinct, loosely coupled layers operating asynchronously:
 
-1. **The Dual-Write Problem**: Saving a payment record to a database and publishing an event to a message broker are two separate operations. If the server crashes after the database write but before the queue publish, the payment is orphaned and never processed.
-2. **In-Place Balance Mutation**: Modifying account balances directly (`merchant.balance += amount`) destroys historical auditability. If race conditions occur or transactions fail partially, proving the mathematical balance is impossible.
-3. **The Indeterminate Network State**: Network requests to payment processors can time out. Did the upstream processor charge the card before the connection broke? Retrying blindly causes duplicate charges; failing blindly loses revenue.
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│  TIER 1: FAST INGRESS GATEWAY (<50ms SLA)                              │
+│  - Verifies merchant API keys against Redis in 1ms.                    │
+│  - Acquires atomic Redis lock on Idempotency-Key.                      │
+│  - Persists Payment (CREATED) + OutboxEvent (PENDING) in one DB write. │
+│  - Immediately returns HTTP 201 Created to caller.                     │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ (Asynchronous Polling Relay)
+┌───────────────────────────────────▼────────────────────────────────────┐
+│  TIER 2: EVENT-DRIVEN RELAY & DISTRIBUTED QUEUES (BullMQ)              │
+│  - Outbox Relay discovers PENDING events every 1.5s.                   │
+│  - Enqueues jobs into Redis BullMQ with deterministic deduplication.   │
+│  - Worker pools claim jobs atomically with processing locks.           │
+│  - Communicates with upstream processor (Razorpay) via retries.        │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ (Verified Payment / Refund Success)
+┌───────────────────────────────────▼────────────────────────────────────┐
+│  TIER 3: IMMUTABLE DOUBLE-ENTRY LEDGER & RECONCILIATION                │
+│  - Database driver rejects UPDATE and DELETE operations on entries.    │
+│  - Balance is calculated dynamically: SUM(Credits) - SUM(Debits).      │
+│  - Background sweeper heals lost or abandoned payments every 60s.      │
+│  - Outbound webhooks dispatch HMAC-signed events to merchants.         │
+└────────────────────────────────────────────────────────────────────────┘
+```
 
-This system resolves these challenges through an event-driven, decoupled architecture:
-- **Fast HTTP Ingestion**: HTTP request handlers perform lightweight validation and local database writes, returning a response in under 50ms.
-- **Transactional Outbox**: Events (`PAYMENT_CREATED`, `REFUND_CREATED`) are stored as database documents in the same database context as the business entities, eliminating dual-writes.
-- **Asynchronous Worker Pools**: Background workers consume jobs from Redis-backed BullMQ queues with exponential backoff retries.
-- **Strictly Append-Only Ledger**: Balances are calculated by summing immutable debit and credit entries.
-- **Background Reconciliation**: An autonomous sweeper polls the processor API for payments stuck in `PROCESSING` status to heal state discrepancies without manual intervention.
+### Why Naive Payment Gateways Fail
+1. **Synchronous Upstream HTTP Calls**: Calling Stripe/Razorpay inside the API route ties up HTTP server threads. If the upstream takes 8 seconds or times out, the client crashes or retries, causing duplicate charges.
+2. **Dual-Write Vulnerability**: Saving to a database and then calling a message queue are two separate operations. If the server crashes between them, the payment is orphaned forever.
+3. **In-Place Balance Mutation**: Doing `merchant.balance += amount` destroys auditability. If a bug occurs, there is no way to mathematically prove why a balance is what it is.
 
 ---
 
-## 2. System Architecture Diagram
+## 2. High-Level System Topology Diagram
 
 ```mermaid
 flowchart TB
-    subgraph Clients["Clients & External Actors"]
-        MerchantApp["Merchant Application / Server"]
-        Dashboard["React Merchant Console (Frontend)"]
-        Customer["End Customer Browser"]
-        RazorpayGateway["Razorpay Processor API & Webhooks"]
+    subgraph Clients["Ingress & External Actors"]
+        MerchantServer["Merchant Backend\n(Sends API requests via x-api-key)"]
+        CustomerBrowser["End-Customer Browser\n(Hosted Checkout UI)"]
+        RazorpayIngress["Razorpay Webhook Servers\n(Sends payment.captured)"]
     end
 
-    subgraph Gateway["Express 5 Gateway (Node.js)"]
-        HTTPRouter["Express HTTP Router (/v1/*)"]
-        AuthMW["Auth Middleware (x-api-key)"]
-        IdempMW["Idempotency Middleware (Idempotency-Key)"]
-        RawBodyMW["Raw Body Parser (HMAC Verification)"]
+    subgraph Gateway["Express 5 Gateway Layer"]
+        HTTPRouter["Express Router (/v1/*)"]
+        AuthMiddleware["Auth Middleware\n(SHA-256 Hash + Redis Cache)"]
+        IdempMiddleware["Idempotency Middleware\n(Redis SET NX + Replay Cache)"]
+        RawBodyParser["Raw Body Parser\n(Preserves raw bytes for HMAC)"]
     end
 
-    subgraph InMem["In-Memory Tier (Redis)"]
-        AuthCache[("Redis Auth Cache\nTTL: 300s")]
-        IdempLocks[("Redis Locks & Response Cache\nTTL: 120s / 24h")]
+    subgraph InMemory["In-Memory Tier (Redis 7)"]
+        AuthCache[("Auth Cache\nKey: auth:merchant:hash\nTTL: 300s")]
+        IdempStore[("Idempotency Store\nKey: idempotency:merchant:key\nTTL: 120s Lock / 24h Replay")]
         BullQueues[("BullMQ Queues\n- payment-process\n- refund-processing-queue\n- webhook-delivery")]
     end
 
-    subgraph PrimaryDB["Primary Database (MongoDB Replica Set)"]
+    subgraph Storage["Primary Storage (MongoDB Replica Set)"]
         ColMerchants[("merchants")]
-        ColPayments[("payments")]
-        ColOutbox[("outboxevents")]
-        ColRefunds[("refunds")]
-        ColLedger[("ledgerentries\n(Immutable / No Updates)")]
-        ColWebhooks[("webhookdeliveries")]
+        ColPayments[("payments\n(State: CREATED, PROCESSING, SUCCEEDED)")]
+        ColOutbox[("outboxevents\n(status: PENDING, PROCESSED, FAILED)")]
+        ColRefunds[("refunds\n(status: PENDING, PROCESSING, SUCCEEDED)")]
+        ColLedger[("ledgerentries\n(IMMUTABLE: No Updates or Deletes)")]
+        ColWebhookLogs[("webhookdeliveries\n(Audit trail of attempts)")]
     end
 
-    subgraph Workers["Background Workers & Relays"]
+    subgraph Workers["Distributed Background Workers"]
         OutboxRelay["Outbox Relay\n(Polls every 1.5s)"]
         PaymentWorker["Payment Worker\n(Concurrency: 5)"]
         RefundWorker["Refund Worker\n(Concurrency: 5)"]
+        ReconSweeper["Reconciliation Sweeper\n(Runs every 60s)"]
         WebhookWorker["Webhook Worker\n(Concurrency: 10)"]
-        ReconWorker["Reconciliation Sweeper\n(Runs every 60s)"]
+    end
+
+    subgraph External["External Services"]
+        RazorpayAPI["Razorpay Payment Gateway API"]
     end
 
     %% Client Interactions
-    MerchantApp -->|"API Requests (x-api-key)"| HTTPRouter
-    Dashboard -->|"Admin & Management Requests"| HTTPRouter
-    Customer -->|"Checkout / Simulation"| HTTPRouter
-    RazorpayGateway -->|"Inbound Webhook Events"| HTTPRouter
+    MerchantServer -->|"1. POST /v1/payments"| HTTPRouter
+    CustomerBrowser -->|"2. Public Checkout / Verify"| HTTPRouter
+    RazorpayIngress -->|"3. Inbound Webhooks"| HTTPRouter
 
     %% Gateway Pipeline
-    HTTPRouter --> RawBodyMW
-    HTTPRouter --> AuthMW
-    AuthMW -->|"1. Check Cache"| AuthCache
-    AuthMW -.->|"2. Cache Miss: Query"| ColMerchants
-    AuthMW --> IdempMW
-    IdempMW -->|"Atomic SET NX Lock / Replay"| IdempLocks
+    HTTPRouter --> RawBodyParser
+    RawBodyParser --> AuthMiddleware
+    AuthMiddleware -->|"Check cached profile"| AuthCache
+    AuthMiddleware -.->|"Cache miss: query DB"| ColMerchants
+    AuthMiddleware --> IdempMiddleware
+    IdempMiddleware -->|"SET NX Lock"| IdempStore
 
-    %% Controller Persistence
-    IdempMW --> ColPayments
-    IdempMW --> ColOutbox
-    IdempMW --> ColRefunds
+    %% Ingress to Storage
+    IdempMiddleware -->|"Write Payment & OutboxEvent"| ColPayments
+    IdempMiddleware -->|"Write OutboxEvent"| ColOutbox
 
     %% Outbox Relay Pipeline
-    OutboxRelay -->|"Polls PENDING events"| ColOutbox
-    OutboxRelay -->|"Pushes jobs"| BullQueues
+    OutboxRelay -->|"Poll PENDING events"| ColOutbox
+    OutboxRelay -->|"Enqueue job with deduplication key"| BullQueues
+    OutboxRelay -->|"Mark event PROCESSED"| ColOutbox
 
-    %% Worker Execution
-    BullQueues -->|"Pulls payment-process jobs"| PaymentWorker
-    PaymentWorker -->|"Creates Upstream Order"| RazorpayGateway
-    PaymentWorker -->|"Updates status / razorpayOrderId"| ColPayments
+    %% Workers Execution
+    BullQueues -->|"Pull payment job"| PaymentWorker
+    PaymentWorker -->|"Atomic claim (CREATED -> PROCESSING)"| ColPayments
+    PaymentWorker -->|"Create Order"| RazorpayAPI
+    PaymentWorker -->|"Save razorpayOrderId"| ColPayments
 
-    BullQueues -->|"Pulls refund-processing jobs"| RefundWorker
-    RefundWorker -->|"Executes Upstream Refund"| RazorpayGateway
-    RefundWorker -->|"Appends DEBIT record"| ColLedger
-    RefundWorker -->|"Dispatches Webhook Job"| BullQueues
-    RefundWorker -.->|"Rolls back on permanent failure"| ColPayments
+    BullQueues -->|"Pull refund job"| RefundWorker
+    RefundWorker -->|"Atomic claim"| ColRefunds
+    RefundWorker -->|"Execute refund"| RazorpayAPI
+    RefundWorker -->|"Append DEBIT entry"| ColLedger
+    RefundWorker -.->|"Rollback on terminal failure"| ColPayments
 
-    BullQueues -->|"Pulls webhook-delivery jobs"| WebhookWorker
-    WebhookWorker -->|"Logs delivery attempt"| ColWebhooks
-    WebhookWorker -->|"Sends Signed HTTP POST"| MerchantApp
+    ReconSweeper -->|"Find stuck payments (>3m)"| ColPayments
+    ReconSweeper -->|"Verify capture status"| RazorpayAPI
+    ReconSweeper -->|"Append CREDIT entry"| ColLedger
 
-    %% Reconciliation Execution
-    ReconWorker -->|"Finds stuck payments (>3m)"| ColPayments
-    ReconWorker -->|"Queries Order Payments"| RazorpayGateway
-    ReconWorker -->|"Appends CREDIT record"| ColLedger
+    BullQueues -->|"Pull webhook job"| WebhookWorker
+    WebhookWorker -->|"Sign HMAC-SHA256"| WebhookWorker
+    WebhookWorker -->|"Dispatch POST"| MerchantServer
+    WebhookWorker -->|"Log attempt"| ColWebhookLogs
 ```
 
 ---
 
-## 3. Major System Components
+## 3. The 7 Core Architectural Pillars
 
-### 3.1 API Gateway & Routing Layer
-The HTTP server is implemented using Express 5 in [app.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/app.js). It configures:
-- **Security**: [helmet](https://helmetjs.github.io/) adds HTTP response headers to prevent common attack vectors; [cors](https://github.com/expressjs/cors) manages browser cross-origin requests.
-- **Raw Body Preservation**: Configured inside `express.json`:
-  ```javascript
-  express.json({
-    verify: (req, res, buf) => {
-      req.rawBody = buf.toString("utf8");
-    },
-  });
-  ```
-  Preserving the unparsed `req.rawBody` buffer is critical for verifying incoming Razorpay webhook signatures against HMAC-SHA256 digests.
-- **Route Namespace**:
-  - `/health` — Public server status.
-  - `/v1/merchants` — Registration and profile.
-  - `/v1/payments` — Merchant payment ingestion and verification.
-  - `/v1/checkout` — Public customer checkout sessions.
-  - `/v1/ledger` — Financial audit entries and aggregated balance.
-  - `/v1/refunds` — Partial/full refund creation and status.
-  - `/v1/webhooks` — Upstream processor webhook reception.
+### Pillar 1: Two-Tier Distributed Idempotency
+- **Source Code**: [backend/src/middleware/idempotency.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/middleware/idempotency.js)
+- **The Problem**: If a network glitch occurs after a merchant requests a payment, the merchant client retries. Without protection, two charges are created for the same customer.
+- **The Solution**: Every mutating request requires an `Idempotency-Key` HTTP header. The engine uses Redis atomic primitives to guarantee exactly-once processing semantics:
 
----
+```
+Request with Idempotency-Key: "order_9988"
+                     │
+         Redis SET NX (120s TTL)
+        ┌────────────┴────────────┐
+   [Lock Acquired]          [Lock Failed]
+        │                         │
+  Execute Gateway          Inspect Redis Key
+   Save to DB                     │
+        │             ┌───────────┴───────────┐
+ Cache response       │                       │
+ state: COMPLETED     │                       │
+ 24h TTL (86400s)     ▼                       ▼
+        │        State = "PROCESSING"    State = "COMPLETED"
+ Return 201           │                       │
+                 Return 409 Conflict     Replay original response
+                 ("Request in-flight")   with header:
+                                         x-idempotent-replay: true
+```
 
-### 3.2 Authentication & Key Verification
-Implemented in [auth.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/middleware/auth.js):
-- **API Key Format**: When a merchant registers via [merchant.controller.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/merchants/merchant.controller.js), the gateway generates a cryptographically random 24-byte hex string prefixed with `key_` (e.g., `key_6a9b4c...`).
-- **One-Way Hashing**: The database stores only the SHA-256 hash (`apiKeyHash`). The raw key is never stored in plaintext and is only returned to the merchant once upon creation.
-- **Two-Tier Verification with Redis Caching**:
-  1. Incoming requests present the key in the `x-api-key` header.
-  2. The middleware computes the SHA-256 hash: `keyHash = hashKey(apiKey)`.
-  3. Redis is checked for the key: `auth:merchant:${keyHash}`.
-  4. **Cache Hit**: `req.merchant` is populated directly from the cached JSON without touching the database.
-  5. **Cache Miss**: MongoDB queries [Merchant](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/merchants/merchant.model.js) for `{ apiKeyHash: keyHash, status: "ACTIVE" }`. If found, the merchant profile is cached in Redis with a 300-second (5-minute) TTL (`EX 300`).
+#### Under the Hood:
+```javascript
+// 1. Atomic Lock Acquisition
+const redisKey = `idempotency:${req.merchant._id}:${idempotencyKey}`;
+const lockAcquired = await redisClient.set(
+  redisKey,
+  JSON.stringify({ state: "PROCESSING" }),
+  "EX", 120, "NX"
+);
 
----
-
-### 3.3 Distributed Idempotency Layer
-Implemented in [idempotency.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/middleware/idempotency.js), this middleware protects state-changing endpoints (`POST /v1/payments`, `POST /v1/refunds`):
-
-1. **Header Identification**: Reads `Idempotency-Key` or `x-idempotency-key`. If missing, the request is immediately rejected with HTTP `400 Bad Request`.
-2. **Atomic Lock Acquisition**:
-   The middleware attempts to write to Redis using the `SET` command with the `NX` (Not Exists) flag and a 120-second TTL:
-   ```javascript
-   const redisKey = `idempotency:${req.merchant._id}:${idempotencyKey}`;
-   const lockAcquired = await redisClient.set(
-     redisKey,
-     JSON.stringify({ state: "PROCESSING" }),
-     "EX",
-     120,
-     "NX"
-   );
-   ```
-3. **Collision & Replay Handling**:
-   - **Case A (`lockAcquired === null` and `state === "PROCESSING"`)**: Another request with the identical key is actively in-flight. The gateway responds immediately with `HTTP 409 Conflict: A request with this Idempotency-Key is currently in-flight`.
-   - **Case B (`lockAcquired === null` and `state === "COMPLETED"`)**: The request has already been executed. The middleware intercepts the call, injects the header `x-idempotent-replay: true`, and replays the original cached `statusCode` and `body` without re-executing business logic.
-4. **Response Caching**:
-   If the lock is acquired, the middleware intercepts `res.json`. When the controller finishes, the response body and status code are written to `redisKey` with `state: "COMPLETED"` and a 24-hour TTL (86,400 seconds).
+// 2. Intercept response and cache for 24 hours
+res.json = function (body) {
+  redisClient.set(
+    redisKey,
+    JSON.stringify({ state: "COMPLETED", statusCode: res.statusCode, body }),
+    "EX", 86400
+  );
+  return originalJson.call(this, body);
+};
+```
 
 ---
 
-### 3.4 Transactional Outbox Pattern
-Implemented via [outbox.model.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/payments/outbox.model.js) and [outbox.relay.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/outbox.relay.js):
+### Pillar 2: Transactional Outbox Pattern
+- **Source Code**: [outbox.model.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/payments/outbox.model.js), [outbox.relay.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/outbox.relay.js)
+- **The Problem**: "Dual-Write Vulnerability". If an API writes to MongoDB and then tries to publish directly to Redis/BullMQ, a power outage or restart between these two steps will cause the event to be permanently lost.
+- **The Solution**: The controller persists the entity (`Payment`) and an `OutboxEvent` document in MongoDB. The HTTP request terminates cleanly in under 50ms. An autonomous Outbox Relay polls pending records and relays them to BullMQ:
 
-- **Problem Addressed**: In distributed architectures, writing to a database and publishing an event to a message queue are two separate network operations. If the application crashes between the two, data is corrupted or lost.
-- **Solution**: The HTTP controller writes both the domain entity (e.g. `Payment`) and an `OutboxEvent` to MongoDB.
-- **Outbox Relay**:
-  - [startOutboxRelay](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/outbox.relay.js#L50-L53) starts an asynchronous background timer that executes [processOutboxBatch](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/outbox.relay.js#L7-L48) every 1,500ms.
-  - It fetches up to 20 events with `status: "PENDING"`, sorted by `createdAt: 1` (FIFO order).
-  - An `isRunning` mutex flag guarantees that long-running relay batches do not overlap.
-  - Events are enqueued into BullMQ queues using deterministic deduplication keys:
-    - `jobId: pay_${event.payload.paymentId}` for `paymentQueue`
-    - `jobId: refund_${event.payload.refundId}` for `refundQueue`
-  - Once enqueued, `event.status` is marked `PROCESSED`.
+```
+[HTTP Request] ────────► MongoDB: Insert Payment + OutboxEvent (PENDING)
+                                  │
+                                  ▼
+[Outbox Relay] ────────► Polls PENDING events (FIFO limit 20)
+(Runs every 1.5s)                 │
+                                  ├──► Pushes to BullMQ (Job ID: `pay_${paymentId}`)
+                                  └──► Marks OutboxEvent: PROCESSED
+```
+
+#### Deduplication Guarantee:
+Even if the relay crashes right after enqueueing, BullMQ uses deterministic job IDs (`jobId: pay_${paymentId}`). If an event is re-enqueued, BullMQ automatically ignores the duplicate.
 
 ---
 
-### 3.5 Message Queues & Worker Concurrency
-Implemented using [BullMQ](https://bullmq.io/) over Redis connections:
+### Pillar 3: Worker Concurrency & Atomic Task Claims
+- **Source Code**: [payment.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/payment.worker.js)
+- **The Problem**: Multiple worker instances running concurrently could pick up the same job and trigger redundant upstream processor API calls.
+- **The Solution**: An atomic `findOneAndUpdate` state transition guarantees single-worker execution:
 
-| Queue | Queue Name | Worker File | Concurrency | Retry Configuration |
-| :--- | :--- | :--- | :--- | :--- |
-| `paymentQueue` | `payment-process` | [payment.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/payment.worker.js) | 5 workers | 3 attempts, exponential backoff (2000ms base) |
-| `refundQueue` | `refund-processing-queue` | [refund.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/refund.worker.js) | 5 workers | 5 attempts, exponential backoff (3000ms base) |
-| `webhookQueue` | `webhook-delivery` | [webhook.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/webhook.worker.js) | 10 workers | 5 attempts, exponential backoff (3000ms base) |
-
-#### Atomic Worker Claims
-To prevent two workers from processing the same payment simultaneously (for example, if a job is delayed or re-delivered):
 ```javascript
 const payment = await Payment.findOneAndUpdate(
-  { _id: paymentId, status: "CREATED" },
+  {
+    _id: paymentId,
+    status: "CREATED", // Atomic check: only claim if not yet taken
+  },
   {
     status: "PROCESSING",
-    processingLock: { workerId: workerId, lockedAt: new Date() },
+    processingLock: {
+      workerId: `worker_${os.hostname()}_${process.pid}`,
+      lockedAt: new Date(),
+    },
   },
   { returnDocument: "after" }
 );
-if (!payment) return; // Another worker claimed or finished this job
+
+if (!payment) return; // Another worker already claimed this task
 ```
-If the lock is acquired, the worker contacts the Razorpay API to generate the order, saves `razorpayOrderId`, and clears the lock. If Razorpay throws an error, the worker resets `status = "CREATED"` and throws the error to trigger BullMQ's exponential backoff.
+- If Razorpay order creation succeeds, `razorpayOrderId` is saved and the lock is cleared.
+- If it fails, `status` resets to `CREATED` and BullMQ's exponential backoff triggers a retry (up to 3 attempts).
 
 ---
 
-### 3.6 Double-Entry Append-Only Financial Ledger
-Implemented in [ledger.model.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.model.js) and [ledger.service.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.service.js):
+### Pillar 4: Immutable Double-Entry Financial Ledger
+- **Source Code**: [ledger.model.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.model.js), [ledger.service.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.service.js)
+- **The Problem**: Traditional systems store a mutable balance (e.g. `merchant.balance = 5000`). If a database update fails mid-way, or concurrent threads update the balance at the same instant, money is lost or created out of thin air.
+- **The Solution**: 
+  1. **Zero Mutable State**: There is no balance column in the database.
+  2. **Append-Only Journal**: Every monetary change is recorded as an immutable `CREDIT` or `DEBIT` entry.
+  3. **Driver-Level Immutability Guard**: Any attempt to run an update or delete query throws an error immediately:
 
-#### 1. Schema Immutability Enforcement
-Ledger records are permanent legal audit events. Modifying or deleting ledger records is blocked at the schema level:
 ```javascript
+// Strict Driver-Level Immutability Guard
 ledgerEntrySchema.pre(
   ["updateOne", "updateMany", "findOneAndUpdate", "deleteOne", "deleteMany"],
   function () {
@@ -256,292 +275,248 @@ ledgerEntrySchema.pre(
   }
 );
 ```
-Furthermore, `timestamps` is configured as `{ createdAt: true, updatedAt: false }`, ensuring no update timestamp can ever exist.
 
-#### 2. Dynamic Balance Aggregation
-There is **no mutable balance field** in the database. A merchant's balance is derived dynamically via a MongoDB aggregation pipeline:
+#### Real-Time Mathematical Balance Calculation:
+When `/v1/ledger/balance` is requested, MongoDB computes the sum via an aggregation pipeline:
+
+$$\text{Available Balance} = \sum \text{Credits} - \sum \text{Debits}$$
+
 ```javascript
 const pipeline = [
   { $match: { merchantId: new mongoose.Types.ObjectId(merchantId) } },
   {
     $group: {
       _id: "$currency",
-      totalCredits: {
-        $sum: { $cond: [{ $eq: ["$type", "CREDIT"] }, "$amount", 0] },
-      },
-      totalDebits: {
-        $sum: { $cond: [{ $eq: ["$type", "DEBIT"] }, "$amount", 0] },
-      },
+      totalCredits: { $sum: { $cond: [{ $eq: ["$type", "CREDIT"] }, "$amount", 0] } },
+      totalDebits: { $sum: { $cond: [{ $eq: ["$type", "DEBIT"] }, "$amount", 0] } },
     },
   },
   {
     $project: {
-      currency: "$_id",
       availableBalance: { $subtract: ["$totalCredits", "$totalDebits"] },
       totalCredits: 1,
       totalDebits: 1,
-      _id: 0,
     },
   },
 ];
 ```
-This guarantees mathematical integrity: `Available Balance = Total Credits - Total Debits`.
 
 ---
 
-### 3.7 Asynchronous Refund Engine
-Implemented across [refund.service.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/refunds/refund.service.js) and [refund.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/refund.worker.js):
-
-1. **Validation & Pre-Reservation**:
-   - Verifies the payment has `status: "SUCCEEDED"`.
-   - Checks that requested `refundAmount <= (payment.amount - payment.refundedAmount)`.
-   - Creates a [Refund](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/refunds/refund.model.js) record with `status: "PENDING"`.
-   - Pre-reserves the amount on the payment document (`refundedAmount += refundAmount`), setting `refundStatus` to `"PARTIAL"` or `"FULL"`.
-   - Emits an outbox event and enqueues `process-refund` into BullMQ.
-2. **Worker Processing**:
-   - Atomically claims the refund record (`status: "PENDING" -> "PROCESSING"`).
-   - Calls Razorpay API: `razorpayClient.payments.refund(refund.processorPaymentId, { amount, notes })`.
-   - Upon success:
-     - Sets `refund.status = "SUCCEEDED"` and stores `processorRefundId`.
-     - Appends an immutable **DEBIT** entry to the ledger via [recordDebit](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.service.js#L29-L52).
-     - Dispatches a `refund.succeeded` event to the `webhookQueue`.
-3. **Failure Compensation**:
-   - If the upstream call fails repeatedly and exhausts all 5 BullMQ retry attempts:
-     - Marks `refund.status = "FAILED"`.
-     - **Compensating Rollback**: Automatically decrements the payment's `refundedAmount`:
-       ```javascript
-       await Payment.findByIdAndUpdate(refund.paymentId, {
-         $inc: { refundedAmount: -refund.amount },
-       });
-       ```
-     - Recalculates `payment.refundStatus` (`NONE`, `PARTIAL`, or `FULL`).
-     - Dispatches a `refund.failed` event to the `webhookQueue`.
+### Pillar 5: Asynchronous Refund Engine with Compensating Rollbacks
+- **Source Code**: [refund.service.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/refunds/refund.service.js), [refund.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/refund.worker.js)
+- **The Problem**: A merchant issues two concurrent refund requests for ₹500 on a ₹800 payment. If not coordinated, both pass validation, refunding ₹1,000 (an overdraft). Furthermore, if the upstream bank rejects the refund, money must not be locked forever.
+- **The Solution (Saga with Compensating Action)**:
+  1. **Pre-Reservation**: During ingestion, the requested amount is atomically added to `payment.refundedAmount`. If `(refundedAmount + requested) > amount`, the request is immediately rejected.
+  2. **Asynchronous Execution**: The Refund Worker invokes Razorpay's refund API with up to 5 exponential backoff retries.
+  3. **Success**: An immutable **DEBIT** entry is recorded in the Ledger.
+  4. **Compensating Rollback**: If Razorpay permanently rejects the refund after exhausting all 5 attempts:
+     ```javascript
+     // Compensating rollback restores the refundable balance
+     await Payment.findByIdAndUpdate(refund.paymentId, {
+       $inc: { refundedAmount: -refund.amount }
+     });
+     refund.status = "FAILED";
+     await refund.save();
+     ```
 
 ---
 
-### 3.8 Self-Healing Reconciliation Sweeper
-Implemented in [reconciliation.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/reconciliation.worker.js):
+### Pillar 6: Self-Healing Reconciliation Engine
+- **Source Code**: [reconciliation.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/reconciliation.worker.js)
+- **The Problem**: In real-world e-commerce, a customer authorizes payment in Razorpay and closes the browser window before the checkout verification callback runs. If Razorpay's webhook is delayed or dropped, the payment is stuck in `PROCESSING` forever.
+- **The Solution**: An autonomous sweeper runs every 60 seconds to detect and heal abandoned payments:
 
-- **Problem Addressed**: Customers might close their browser immediately after payment, or network disruptions might prevent the checkout verification call or webhook from reaching the server. The payment remains stuck in `PROCESSING` status.
-- **Sweeper Execution**:
-  - Runs automatically every 60 seconds (`setInterval(runReconciliationSweep, 60000)`).
-  - Finds payments where:
-    ```javascript
-    {
-      status: "PROCESSING",
-      razorpayOrderId: { $ne: null },
-      updatedAt: { $lt: new Date(Date.now() - 3 * 60 * 1000) } // Older than 3 minutes
-    }
-    ```
-  - For each stuck payment, calls Razorpay: `fetchOrderPayments(payment.razorpayOrderId)`.
-  - **Resolution A (Captured Payment Found)**:
-    - Updates payment `status: "SUCCEEDED"`.
-    - Appends a **CREDIT** entry to the ledger via `recordCredit`.
-    - Dispatches a `payment.succeeded` webhook to the merchant.
-  - **Resolution B (No Capture & Payment Window Expired > 10 min)**:
-    - Marks payment `status: "FAILED"`.
-    - Sets `failureReason = "Payment window expired without capture"`.
-    - Dispatches a `payment.failed` webhook to the merchant.
+```
+[Reconciliation Sweeper (Runs every 60s)]
+                     │
+   Find payments where:
+   - status == "PROCESSING"
+   - razorpayOrderId != null
+   - updatedAt < (Now - 3 minutes)
+                     │
+   Query Razorpay API: fetchOrderPayments(razorpayOrderId)
+                     │
+      ┌──────────────┴──────────────┐
+  [Captured Payment Found]    [No Capture Found]
+      │                             │
+  Update Payment -> SUCCEEDED       Was payment created > 10m ago?
+  Append Ledger CREDIT              ┌───────┴───────┐
+  Dispatch merchant webhook        Yes              No
+                                    │               │
+                            Update -> FAILED    Leave for next
+                            Dispatch webhook       sweep
+```
 
 ---
 
-### 3.9 Webhook Delivery & Cryptographic Verification
+### Pillar 7: Cryptographic Webhook Security (Inbound & Outbound)
+- **Source Code**: [razorpay.webhook.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/webhooks/razorpay.webhook.js), [webhook.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/webhook.worker.js)
 
-#### Inbound Webhooks ([razorpay.webhook.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/webhooks/razorpay.webhook.js))
-- Receives events from Razorpay at `POST /v1/webhooks/razorpay`.
-- Computes the expected signature:
-  ```javascript
-  const expectedSignature = crypto
-    .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET)
-    .update(req.rawBody)
-    .digest("hex");
-  ```
-- If the signature matches:
-  - For `payment.captured` / `order.paid`: marks payment `SUCCEEDED`, writes ledger credit, and schedules merchant webhook.
-  - For `payment.failed`: marks payment `FAILED`, saves reason, and schedules merchant webhook.
+#### 1. Inbound Webhooks (From Razorpay to Gateway)
+- Express JSON parser preserves the unparsed byte string buffer in `req.rawBody`.
+- Middleware computes:
+  $$\text{Expected Signature} = \text{HMAC-SHA256}(\text{req.rawBody}, \text{RAZORPAY\_WEBHOOK\_SECRET})$$
+- If `expectedSignature !== req.headers["x-razorpay-signature"]`, the request is rejected with `400 Bad Request`.
 
-#### Outbound Webhooks ([webhook.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/webhook.worker.js))
-- Consumes jobs from `webhookQueue` (`concurrency: 10`).
-- Generates an HMAC-SHA256 signature using the merchant's private `webhookSecret`:
+#### 2. Outbound Webhooks (From Gateway to Merchants)
+- Whenever a payment succeeds, fails, or refunds, a job is pushed to BullMQ's `webhookQueue`.
+- The Webhook Worker generates an HMAC signature using the merchant's private `webhookSecret`:
   ```javascript
   const signature = crypto
     .createHmac("sha256", merchant.webhookSecret)
     .update(JSON.stringify(payload))
     .digest("hex");
   ```
-- Dispatches an HTTP `POST` to `merchant.webhookUrl` with headers:
-  - `Content-Type: application/json`
-  - `x-signature: sha256=${signature}`
-  - `x-event: ${eventType}`
-- Uses `AbortSignal.timeout(5000)` (5-second timeout).
-- Every attempt is recorded in the [WebhookDelivery](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/webhooks/webhook.model.js) collection (tracking `attemptNumber`, `responseStatus`, `responseBody`, and `status`).
+- Posts to `merchant.webhookUrl` with headers:
+  - `x-signature: sha256=<signature>`
+  - `x-event: payment.succeeded`
+- Delivery attempts, status codes, and latency are recorded in `webhookdeliveries` for audit logging. If the merchant server fails, BullMQ retries up to 5 times.
 
 ---
 
-### 3.10 Customer Checkout Engine
-Implemented across [checkout.controller.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/checkout/checkout.controller.js) and [CheckoutPage.jsx](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/frontend/src/pages/CheckoutPage.jsx):
+## 4. End-to-End Execution Sequence Diagrams
 
-- **Public Endpoints**: Unlike merchant APIs, checkout routes (`GET /v1/checkout/:id` and `POST /v1/checkout/verify`) require **no merchant API key**.
-- **Sanitized Session Data**: Returns amount, currency, status, customer email, `razorpayOrderId`, public `razorpayKeyId`, and merchant name. Sensitive merchant credentials remain shielded.
-- **Verification**: Verifies the Razorpay signature `crypto.createHmac('sha256', secret).update(orderId + '|' + paymentId)`. Once verified, marks the payment `SUCCEEDED` and writes the ledger credit.
-
----
-
-## 4. End-to-End Data Flows
-
-### Flow 1: Payment Ingestion & Outbox Relay
+### Flow 1: Payment Ingestion & Fast API Return
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Merchant as Merchant System
     participant GW as Gateway API (/v1/payments)
-    participant Redis as Redis (Idempotency & Cache)
+    participant Redis as Redis (Auth & Idempotency)
     participant Mongo as MongoDB
-    participant Relay as Outbox Relay (1.5s Loop)
-    participant Queue as BullMQ (paymentQueue)
 
-    Merchant->>GW: POST /v1/payments (x-api-key, Idempotency-Key)
-    GW->>Redis: Check auth:merchant:<hash>
+    Merchant->>GW: POST /v1/payments (Headers: x-api-key, Idempotency-Key)
+    GW->>Redis: Check auth:merchant:<hash> (TTL 300s)
     alt Cache Hit
-        Redis-->>GW: Cached Merchant Data
+        Redis-->>GW: Merchant Profile
     else Cache Miss
         GW->>Mongo: Find Merchant by apiKeyHash
         Mongo-->>GW: Merchant Profile
-        GW->>Redis: Cache Merchant (TTL 300s)
+        GW->>Redis: Cache Merchant Profile
     end
 
     GW->>Redis: SET idempotency:<id>:<key> {"state":"PROCESSING"} EX 120 NX
-    alt Key already exists
-        Redis-->>GW: Lock Failed
+    alt Lock Failed (Key exists)
         GW->>Redis: GET idempotency:<id>:<key>
-        alt State is PROCESSING
-            GW-->>Merchant: 409 Conflict (In-Flight)
-        else State is COMPLETED
-            GW-->>Merchant: Replay Cached Response (x-idempotent-replay: true)
+        alt State == PROCESSING
+            GW-->>Merchant: 409 Conflict ("Request in-flight")
+        else State == COMPLETED
+            GW-->>Merchant: 201 Replay Cached Body (x-idempotent-replay: true)
         end
     else Lock Acquired
         GW->>Mongo: Create Payment (status: "CREATED")
         GW->>Mongo: Create OutboxEvent (eventType: "PAYMENT_CREATED", status: "PENDING")
-        GW->>Redis: SET idempotency:<id>:<key> {"state":"COMPLETED", body, status} EX 86400
-        GW-->>Merchant: 201 Created (paymentId, amount, status: "CREATED")
-    end
-
-    loop Every 1500ms
-        Relay->>Mongo: Find PENDING OutboxEvents (limit 20)
-        Mongo-->>Relay: [OutboxEvent]
-        Relay->>Queue: Add job (jobId: pay_<paymentId>)
-        Relay->>Mongo: Update OutboxEvent (status: "PROCESSED")
+        GW->>Redis: SET idempotency:<id>:<key> {"state":"COMPLETED", body} EX 86400
+        GW-->>Merchant: 201 Created (paymentId, amount, status: "CREATED") [SLA: <50ms]
     end
 ```
 
 ---
 
-### Flow 2: Payment Worker & Upstream Order Creation
+### Flow 2: Outbox Polling & Upstream Order Creation
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Queue as BullMQ (paymentQueue)
-    participant Worker as Payment Worker
+    participant Relay as Outbox Relay (1.5s Interval)
     participant Mongo as MongoDB
+    participant BullMQ as BullMQ (paymentQueue)
+    participant Worker as Payment Worker
     participant Razorpay as Razorpay API
 
-    Queue->>Worker: Job: process-payment (paymentId, amount, currency)
-    Worker->>Mongo: findOneAndUpdate({ _id: paymentId, status: "CREATED" } -> "PROCESSING")
-    alt Payment already claimed or processed
-        Worker-->>Queue: Skip Job
-    else Lock Acquired
+    Relay->>Mongo: Find OutboxEvents (status: "PENDING", limit: 20)
+    Mongo-->>Relay: [OutboxEvent]
+    Relay->>BullMQ: Add job (jobId: pay_<paymentId>)
+    Relay->>Mongo: Update OutboxEvent (status: "PROCESSED")
+
+    BullMQ->>Worker: Consume job: process-payment
+    Worker->>Mongo: Atomic claim: status "CREATED" -> "PROCESSING"
+    alt Already claimed
+        Worker-->>BullMQ: Skip duplicate execution
+    else Claim Successful
         Worker->>Razorpay: orders.create({ amount, currency, receipt: paymentId })
         alt Razorpay Success
-            Razorpay-->>Worker: { id: "order_123", status: "created" }
-            Worker->>Mongo: Update Payment (razorpayOrderId: "order_123", processingLock: null)
-            Worker-->>Queue: Job Completed
-        else Razorpay Error
-            Razorpay-->>Worker: Error / Timeout
-            Worker->>Mongo: Reset Payment (status: "CREATED", failureReason: err.message)
-            Worker-->>Queue: Throw error (Triggers Exponential Backoff Retry)
+            Razorpay-->>Worker: { id: "order_xyz123" }
+            Worker->>Mongo: Save razorpayOrderId & clear processingLock
+            Worker-->>BullMQ: Job Completed
+        else Razorpay Error / Timeout
+            Worker->>Mongo: Reset status: "CREATED"
+            Worker-->>BullMQ: Throw Error (Triggers Exponential Backoff)
         end
     end
 ```
 
 ---
 
-### Flow 3: Customer Checkout & Cryptographic Verification
+### Flow 3: Customer Checkout & Cryptographic Signature Verification
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Customer as Customer Browser
     participant CheckoutAPI as Gateway API (/v1/checkout)
+    participant RazorpayModal as Razorpay Checkout SDK
     participant Mongo as MongoDB
     participant Ledger as Ledger Service
-    participant RazorpaySDK as Razorpay Checkout Modal
 
-    Customer->>CheckoutAPI: GET /v1/checkout/:id
-    CheckoutAPI->>Mongo: Find Payment by ID
-    Mongo-->>CheckoutAPI: Payment (amount, currency, razorpayOrderId)
-    CheckoutAPI-->>Customer: Public Session JSON (orderId, keyId, amount)
+    Customer->>CheckoutAPI: GET /v1/checkout/:paymentId
+    CheckoutAPI->>Mongo: Fetch Payment details
+    CheckoutAPI-->>Customer: Sanitized metadata (orderId, keyId, amount)
 
-    Customer->>RazorpaySDK: Open Razorpay Modal (order_id, amount)
-    Customer->>RazorpaySDK: Enter Card / UPI & Authorize
-    RazorpaySDK-->>Customer: Success (razorpayPaymentId, razorpaySignature)
+    Customer->>RazorpayModal: Authorize Card / UPI
+    RazorpayModal-->>Customer: Returns { razorpayPaymentId, razorpaySignature }
 
-    Customer->>CheckoutAPI: POST /v1/checkout/verify (paymentId, orderId, paymentId, signature)
-    CheckoutAPI->>CheckoutAPI: verifyPaymentSignature(HMAC-SHA256)
-    alt Signature Invalid
-        CheckoutAPI-->>Customer: 400 Bad Request ("Invalid payment signature")
+    Customer->>CheckoutAPI: POST /v1/checkout/verify
+    CheckoutAPI->>CheckoutAPI: Verify HMAC-SHA256 (orderId + "|" + paymentId)
+    alt Invalid Signature
+        CheckoutAPI-->>Customer: 400 Bad Request ("Signature verification failed")
     else Signature Valid
-        CheckoutAPI->>Mongo: Find Payment by ID
-        opt status != "SUCCEEDED"
-            CheckoutAPI->>Mongo: Update Payment (status: "SUCCEEDED", razorpayPaymentId)
-            CheckoutAPI->>Ledger: recordCredit(merchantId, paymentId, amount, currency)
-            Ledger->>Mongo: Insert LedgerEntry (type: "CREDIT", amount)
-        end
+        CheckoutAPI->>Mongo: Update Payment (status: "SUCCEEDED", razorpayPaymentId)
+        CheckoutAPI->>Ledger: recordCredit(merchantId, paymentId, amount)
+        Ledger->>Mongo: Insert LedgerEntry (type: "CREDIT")
         CheckoutAPI-->>Customer: 200 OK (status: "SUCCEEDED")
     end
 ```
 
 ---
 
-### Flow 4: Inbound Razorpay Webhook Handling
+### Flow 4: Inbound Webhook Processing
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Razorpay as Razorpay Server
-    participant WebhookAPI as Gateway API (/v1/webhooks/razorpay)
+    actor RazorpayServer as Razorpay Webhook Dispatcher
+    participant WebhookRoute as Gateway API (/v1/webhooks/razorpay)
     participant Mongo as MongoDB
     participant Ledger as Ledger Service
     participant Queue as BullMQ (webhookQueue)
 
-    Razorpay->>WebhookAPI: POST /v1/webhooks/razorpay (Headers: x-razorpay-signature, Body: raw JSON)
-    WebhookAPI->>WebhookAPI: HMAC-SHA256(req.rawBody, RAZORPAY_WEBHOOK_SECRET)
+    RazorpayServer->>WebhookRoute: POST /v1/webhooks/razorpay (Headers: x-razorpay-signature)
+    WebhookRoute->>WebhookRoute: HMAC-SHA256(req.rawBody, RAZORPAY_WEBHOOK_SECRET)
     alt Signature Mismatch
-        WebhookAPI-->>Razorpay: 400 Bad Request ("Invalid webhook signature")
+        WebhookRoute-->>RazorpayServer: 400 Bad Request
     else Signature Verified
-        alt event == "payment.captured" or "order.paid"
-            WebhookAPI->>Mongo: Find Payment by razorpayOrderId
-            opt status != "SUCCEEDED"
-                WebhookAPI->>Mongo: Update Payment (status: "SUCCEEDED", razorpayPaymentId)
-                WebhookAPI->>Ledger: recordCredit(merchantId, paymentId, amount)
+        alt Event == "payment.captured" or "order.paid"
+            WebhookRoute->>Mongo: Find Payment by razorpayOrderId
+            opt If status != "SUCCEEDED"
+                WebhookRoute->>Mongo: Update status: "SUCCEEDED"
+                WebhookRoute->>Ledger: recordCredit(merchantId, paymentId, amount)
                 Ledger->>Mongo: Insert LedgerEntry (type: "CREDIT")
-                WebhookAPI->>Queue: Add "send-webhook" (payment.succeeded)
+                WebhookRoute->>Queue: Enqueue merchant notification (payment.succeeded)
             end
-        else event == "payment.failed"
-            WebhookAPI->>Mongo: Find Payment by razorpayOrderId
-            opt status != "FAILED"
-                WebhookAPI->>Mongo: Update Payment (status: "FAILED", failureReason)
-                WebhookAPI->>Queue: Add "send-webhook" (payment.failed)
-            end
+        else Event == "payment.failed"
+            WebhookRoute->>Mongo: Update status: "FAILED"
+            WebhookRoute->>Queue: Enqueue merchant notification (payment.failed)
         end
-        WebhookAPI-->>Razorpay: 200 OK ({ status: "ok" })
+        WebhookRoute-->>RazorpayServer: 200 OK ({ status: "ok" })
     end
 ```
 
 ---
 
-### Flow 5: Asynchronous Refund Lifecycle
+### Flow 5: Partial / Full Refund Lifecycle with Saga Rollback
 
 ```mermaid
 sequenceDiagram
@@ -549,36 +524,32 @@ sequenceDiagram
     actor Merchant as Merchant System
     participant GW as Gateway API (/v1/refunds)
     participant Mongo as MongoDB
-    participant Queue as BullMQ (refundQueue)
+    participant BullMQ as BullMQ (refundQueue)
     participant Worker as Refund Worker
     participant Razorpay as Razorpay API
     participant Ledger as Ledger Service
-    participant WebhookQ as BullMQ (webhookQueue)
 
     Merchant->>GW: POST /v1/refunds (paymentId, amount, Idempotency-Key)
-    GW->>Mongo: Validate Payment (status == "SUCCEEDED", amount <= remaining)
-    GW->>Mongo: Create Refund (status: "PENDING", amount)
-    GW->>Mongo: Pre-reserve Payment (refundedAmount += amount, refundStatus)
-    GW->>Mongo: Create OutboxEvent (REFUND_CREATED)
-    GW->>Queue: Add job (jobId: refund_<refundId>)
+    GW->>Mongo: Verify Payment is SUCCEEDED and amount <= remaining
+    GW->>Mongo: Pre-reserve: payment.refundedAmount += amount
+    GW->>Mongo: Create Refund (status: "PENDING")
+    GW->>BullMQ: Enqueue job: process-refund
     GW-->>Merchant: 202 Accepted ({ refundId, status: "PENDING" })
 
-    Queue->>Worker: Job: process-refund (refundId)
-    Worker->>Mongo: Claim Refund (status: "PENDING" -> "PROCESSING")
-    Worker->>Razorpay: payments.refund(processorPaymentId, { amount, notes })
-    alt Upstream Refund Succeeded
-        Razorpay-->>Worker: { id: "rfnd_abc123", status: "processed" }
+    BullMQ->>Worker: Consume refund job
+    Worker->>Mongo: Claim refund (PENDING -> PROCESSING)
+    Worker->>Razorpay: payments.refund(processorPaymentId, { amount })
+    alt Refund Succeeded
+        Razorpay-->>Worker: { id: "rfnd_abc", status: "processed" }
         Worker->>Mongo: Update Refund (status: "SUCCEEDED", processorRefundId)
         Worker->>Ledger: recordDebit(merchantId, paymentId, refundId, amount)
-        Ledger->>Mongo: Insert LedgerEntry (type: "DEBIT", amount)
-        Worker->>WebhookQ: Add job (refund.succeeded)
-        Worker-->>Queue: Job Completed
-    else Upstream Permanent Failure (Attempts Exhausted)
-        Razorpay-->>Worker: Error (e.g. Card Expired / Rejected)
+        Ledger->>Mongo: Insert LedgerEntry (type: "DEBIT")
+        Worker-->>BullMQ: Job Completed
+    else Permanent Failure (Exhausted 5 attempts)
+        Razorpay-->>Worker: Error (Bank rejection / expired card)
+        Worker->>Mongo: Compensating Rollback: payment.refundedAmount -= amount
         Worker->>Mongo: Update Refund (status: "FAILED", failureReason)
-        Worker->>Mongo: Compensating Rollback (payment.refundedAmount -= amount)
-        Worker->>WebhookQ: Add job (refund.failed)
-        Worker-->>Queue: Terminal Failure Recorded
+        Worker-->>BullMQ: Terminal Failure Acknowledged
     end
 ```
 
@@ -589,26 +560,26 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Recon as Reconciliation Worker (60s Loop)
+    participant Sweeper as Reconciliation Worker (Runs every 60s)
     participant Mongo as MongoDB
     participant Razorpay as Razorpay API
     participant Ledger as Ledger Service
-    participant WebhookQ as BullMQ (webhookQueue)
+    participant Queue as BullMQ (webhookQueue)
 
     loop Every 60 seconds
-        Recon->>Mongo: Find Payments (status: "PROCESSING", razorpayOrderId != null, updatedAt < 3 min ago)
-        Mongo-->>Recon: [Stuck Payments]
+        Sweeper->>Mongo: Query payments (status: "PROCESSING", updatedAt < Now - 3m)
+        Mongo-->>Sweeper: [Stuck Payment Documents]
         loop For each stuck payment
-            Recon->>Razorpay: fetchOrderPayments(razorpayOrderId)
-            Razorpay-->>Recon: { items: [ { id: "pay_123", status: "captured" } ] }
-            alt Captured Payment Found
-                Recon->>Mongo: Update Payment (status: "SUCCEEDED", razorpayPaymentId: "pay_123")
-                Recon->>Ledger: recordCredit(merchantId, paymentId, amount)
+            Sweeper->>Razorpay: fetchOrderPayments(razorpayOrderId)
+            Razorpay-->>Sweeper: { items: [ { id: "pay_123", status: "captured" } ] }
+            alt Captured payment found
+                Sweeper->>Mongo: Update Payment (status: "SUCCEEDED", razorpayPaymentId: "pay_123")
+                Sweeper->>Ledger: recordCredit(merchantId, paymentId, amount)
                 Ledger->>Mongo: Insert LedgerEntry (type: "CREDIT")
-                Recon->>WebhookQ: Add job (payment.succeeded)
-            else No Capture & Payment Window Expired (>10 min)
-                Recon->>Mongo: Update Payment (status: "FAILED", failureReason: "Payment window expired")
-                Recon->>WebhookQ: Add job (payment.failed)
+                Sweeper->>Queue: Enqueue merchant webhook (payment.succeeded)
+            else No capture & payment window expired (>10m)
+                Sweeper->>Mongo: Update Payment (status: "FAILED")
+                Sweeper->>Queue: Enqueue merchant webhook (payment.failed)
             end
         end
     end
@@ -616,7 +587,7 @@ sequenceDiagram
 
 ---
 
-### Flow 7: Outbound Webhook Delivery & Retries
+### Flow 7: Outbound Webhook Delivery with Exponential Backoff
 
 ```mermaid
 sequenceDiagram
@@ -624,20 +595,20 @@ sequenceDiagram
     participant Queue as BullMQ (webhookQueue)
     participant Worker as Webhook Worker
     participant Mongo as MongoDB
-    actor Merchant as Merchant Webhook Server
+    actor MerchantServer as Merchant Webhook Endpoint
 
-    Queue->>Worker: Job: dispatch-webhook (merchantId, eventType, payload)
-    Worker->>Mongo: Find Merchant by ID (get webhookUrl, webhookSecret)
-    Worker->>Worker: Compute HMAC-SHA256 signature using webhookSecret
-    Worker->>Merchant: POST webhookUrl (Headers: x-signature, x-event, Body: JSON)
+    Queue->>Worker: Consume job: dispatch-webhook
+    Worker->>Mongo: Fetch Merchant webhookUrl & webhookSecret
+    Worker->>Worker: Compute HMAC-SHA256 signature
+    Worker->>MerchantServer: POST webhookUrl (Headers: x-signature, x-event)
     alt Merchant responds HTTP 2xx
-        Merchant-->>Worker: 200 OK
+        MerchantServer-->>Worker: 200 OK
         Worker->>Mongo: Insert WebhookDelivery (status: "SUCCESS", responseStatus: 200)
         Worker-->>Queue: Job Completed
-    else Merchant Error / Timeout (5s)
-        Merchant-->>Worker: 500 Internal Error / Connection Timeout
-        Worker->>Mongo: Insert WebhookDelivery (status: "FAILED", errorMessage)
-        Worker-->>Queue: Throw error (Triggers BullMQ Exponential Backoff, max 5 attempts)
+    else Merchant returns 5xx or Connection Times Out (5s)
+        MerchantServer-->>Worker: Error / Timeout
+        Worker->>Mongo: Insert WebhookDelivery (status: "FAILED", attemptNumber)
+        Worker-->>Queue: Throw error (BullMQ retries with Exponential Backoff, max 5)
     end
 ```
 
@@ -649,10 +620,10 @@ sequenceDiagram
 
 ```mermaid
 stateDiagram-v2
-    [*] --> CREATED: Ingested via POST /v1/payments
-    CREATED --> PROCESSING: Claimed by payment.worker.js
-    PROCESSING --> SUCCEEDED: Verified via Checkout / Webhook / Reconciliation
-    PROCESSING --> FAILED: Payment Window Expired / Processor Rejection
+    [*] --> CREATED: Ingested via POST /v1/payments (Outbox written)
+    CREATED --> PROCESSING: Claimed by payment.worker.js (Order created in Razorpay)
+    PROCESSING --> SUCCEEDED: Customer completes checkout OR Inbound webhook captures OR Reconciliation heals
+    PROCESSING --> FAILED: Checkout window expires (>10m) OR Processor rejects
     CREATED --> CANCELLED: Explicit cancellation
     SUCCEEDED --> [*]
     FAILED --> [*]
@@ -671,57 +642,46 @@ stateDiagram-v2
 stateDiagram-v2
     [*] --> PENDING: Ingested via POST /v1/refunds (Amount reserved on payment)
     PENDING --> PROCESSING: Claimed by refund.worker.js
-    PROCESSING --> SUCCEEDED: Razorpay payments.refund succeeded (Ledger DEBIT written)
-    PROCESSING --> FAILED: Exhausted 5 attempts (Payment amount rolled back)
+    PROCESSING --> SUCCEEDED: Razorpay accepts refund (Ledger DEBIT recorded)
+    PROCESSING --> FAILED: Upstream failure after 5 retries (Amount rolled back to payment)
     SUCCEEDED --> [*]
     FAILED --> [*]
 ```
 
 ---
 
-## 6. Distributed Failure Modes & Recovery Matrix
+## 6. Distributed Failure Modes & Disaster Recovery Matrix
 
-| Failure Scenario | Root Cause | System Defense & Recovery Mechanism |
-| :--- | :--- | :--- |
-| **Merchant clicks "Pay" twice** | Network hesitation or duplicate user action | **Redis Idempotency Lock**: Second request receives HTTP 409 while in-flight, or replayed cached response if completed. |
-| **Gateway crashes after payment save** | Machine reboot before queue enqueue | **Transactional Outbox**: The event is persisted in MongoDB; upon reboot, the outbox relay discovers it and pushes it to BullMQ. |
-| **Worker crashes during order creation** | OOM or host termination | **Atomic Processing Lock**: The worker claims the document with `processingLock: { workerId, lockedAt }`. BullMQ retries the job; the lock resets upon failure. |
-| **Customer closes tab during checkout** | Browser closed before `/verify` callback | **Reconciliation Sweeper**: Poller queries Razorpay for the order after 3 minutes, detects capture, updates status to `SUCCEEDED`, and writes ledger credit. |
-| **Merchant webhook endpoint is down** | Merchant server maintenance or crash | **Exponential Backoff Retries**: BullMQ retries delivery up to 5 times with exponential backoff (`delay = 3000ms * 2^(attempt-1)`). |
-| **Corrupted ledger database write** | Software bug attempting to edit historical entry | **Mongoose Immutability Guard**: Schema pre-hook rejects `updateOne`, `deleteMany`, etc., throwing `LEDGER_IMMUTABILITY_VIOLATION`. |
-| **Upstream processor rejects refund** | Card issuer rejection / expired instrument | **Compensating Rollback**: After 5 attempts, the refund worker sets `status: "FAILED"`, decrements `payment.refundedAmount`, and restores refundable balance. |
-| **Redis server restarts** | Ephemeral memory crash | **Persistent Fallback**: BullMQ reconnects automatically; critical business data resides safely in MongoDB replica sets. |
+| # | Failure Scenario | Exact Root Cause | Immediate Defense Mechanism | Recovery & Eventual Consistency |
+| :---: | :--- | :--- | :--- | :--- |
+| **1** | **User double-clicks "Pay"** | Latency hesitation or mobile retry | Redis atomic `SET NX` lock on `idempotency:<id>:<key>` | Returns HTTP `409 Conflict` if in-flight; returns cached HTTP `201` if already finished. |
+| **2** | **Server crashes during payment write** | Power outage or container restart | Atomic MongoDB session write | MongoDB commits either both `Payment` and `OutboxEvent` or neither. No partial writes. |
+| **3** | **Worker crashes while creating order** | Out of memory (OOM) or SIGKILL | Atomic document claim lock | BullMQ detects worker stall. `processingLock` timestamps allow lock reassignment. |
+| **4** | **Customer drops internet after paying** | User closes browser on success screen | Reconciliation Sweeper | Sweeper queries Razorpay after 3 minutes, detects captured status, and records ledger credit. |
+| **5** | **Merchant webhook endpoint crashes** | Merchant server maintenance (500/503) | BullMQ exponential backoff | Retries delivery 5 times: 3s, 6s, 12s, 24s, 48s. Every attempt is logged in MongoDB. |
+| **6** | **Bug attempts to mutate past ledger entry** | Unauthorized code or database mutation | Mongoose pre-hook guard | Schema hooks intercept `updateOne`, `deleteMany`, etc., throwing `LEDGER_IMMUTABILITY_VIOLATION`. |
+| **7** | **Processor rejects partial refund** | Card expired or bank account closed | Compensating Saga Rollback | Worker catches terminal failure, decrements `payment.refundedAmount`, and restores refundable balance. |
+| **8** | **Redis restarts unexpectedly** | Redis memory flush or container reboot | MongoDB Source-of-Truth | BullMQ reconnects automatically. Outbox relay re-polls any pending events from MongoDB. |
 
 ---
 
 ## 7. Codebase Reference Map
 
-For direct inspection of the implementation, refer to the following repository locations:
+Direct clickable links to implementation files in the repository:
 
-- **Server Configuration & Entry**: [backend/src/app.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/app.js)
-- **Database & Queue Connections**:
-  - [backend/src/config/db.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/config/db.js)
-  - [backend/src/config/redis.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/config/redis.js)
-  - [backend/src/config/razorpay.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/config/razorpay.js)
-- **Middleware**:
-  - [backend/src/middleware/auth.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/middleware/auth.js)
-  - [backend/src/middleware/idempotency.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/middleware/idempotency.js)
-- **Domain Modules**:
-  - **Merchants**: [merchant.model.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/merchants/merchant.model.js), [merchant.controller.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/merchants/merchant.controller.js), [merchant.routes.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/merchants/merchant.routes.js)
-  - **Payments & Outbox**: [payment.model.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/payments/payment.model.js), [outbox.model.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/payments/outbox.model.js), [payment.controller.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/payments/payment.controller.js), [payment.routes.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/payments/payment.routes.js)
-  - **Ledger**: [ledger.model.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.model.js), [ledger.service.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.service.js), [ledger.routes.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.routes.js)
-  - **Refunds**: [refund.model.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/refunds/refund.model.js), [refund.service.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/refunds/refund.service.js), [refund.controller.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/refunds/refund.controller.js), [refund.routes.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/refunds/refund.routes.js)
-  - **Checkout**: [checkout.controller.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/checkout/checkout.controller.js), [checkout.routes.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/checkout/checkout.routes.js)
-  - **Webhooks**: [webhook.model.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/webhooks/webhook.model.js), [razorpay.webhook.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/webhooks/razorpay.webhook.js), [webhook.routes.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/webhooks/webhook.routes.js)
-- **Queues & Workers**:
-  - [backend/src/queues/payment.queue.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/queues/payment.queue.js)
-  - [backend/src/queues/refund.queue.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/queues/refund.queue.js)
-  - [backend/src/queues/webhook.queue.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/queues/webhook.queue.js)
-  - [backend/src/workers/outbox.relay.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/outbox.relay.js)
-  - [backend/src/workers/payment.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/payment.worker.js)
-  - [backend/src/workers/refund.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/refund.worker.js)
-  - [backend/src/workers/webhook.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/webhook.worker.js)
-  - [backend/src/workers/reconciliation.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/reconciliation.worker.js)
-- **Frontend Console**:
-  - [frontend/src/App.jsx](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/frontend/src/App.jsx)
-  - [frontend/src/lib/api.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/frontend/src/lib/api.js)
+| Functional Area | Source Code Link | Primary Role |
+| :--- | :--- | :--- |
+| **Server Entrypoint** | [app.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/app.js) | Express 5 setup, security headers, raw body parser, and route mounting |
+| **Redis Singleton** | [redis.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/config/redis.js) | ioredis client configuration and connection event listeners |
+| **Database Connection** | [db.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/config/db.js) | Mongoose replica set connection handler |
+| **API Authentication** | [auth.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/middleware/auth.js) | `x-api-key` SHA-256 hashing and Redis caching (TTL 300s) |
+| **Distributed Idempotency** | [idempotency.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/middleware/idempotency.js) | Atomic `SET NX` locks and 24-hour response replay |
+| **Payment Ingestion** | [payment.controller.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/payments/payment.controller.js) | Validates input, saves payment + outbox event (< 50ms response) |
+| **Outbox Relay** | [outbox.relay.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/outbox.relay.js) | Polls pending outbox records every 1.5s and enqueues to BullMQ |
+| **Payment Worker** | [payment.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/payment.worker.js) | Claims jobs atomically, invokes Razorpay SDK, updates order ID |
+| **Double-Entry Ledger Model** | [ledger.model.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.model.js) | Blocks updates & deletes with `LEDGER_IMMUTABILITY_VIOLATION` |
+| **Dynamic Balance Service** | [ledger.service.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.service.js) | Aggregation pipeline calculating `SUM(Credits) - SUM(Debits)` |
+| **Refund Engine & Saga** | [refund.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/refund.worker.js) | Pre-reserves balance, invokes processor, handles compensating rollback |
+| **Reconciliation Sweeper** | [reconciliation.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/reconciliation.worker.js) | Sweeps stuck payments older than 3 minutes every 60 seconds |
+| **Webhook Delivery Worker** | [webhook.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/webhook.worker.js) | Signs HMAC-SHA256 headers and executes HTTP POST with retries |
+| **Hosted Checkout Portal** | [CheckoutPage.jsx](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/frontend/src/pages/CheckoutPage.jsx) | Customer interface triggering the Razorpay Checkout Modal |
