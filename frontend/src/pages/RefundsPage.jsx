@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   RotateCcw,
@@ -101,6 +101,64 @@ export default function RefundsPage() {
     };
   }, [filteredRefunds]);
 
+  // Live Auto-Polling: poll if any refund in the list is in PENDING or PROCESSING state
+  const hasInFlightRefund = useMemo(() => {
+    return Array.isArray(refundsData) && refundsData.some(
+      (r) => r.status === "PENDING" || r.status === "PROCESSING"
+    );
+  }, [refundsData]);
+
+  useEffect(() => {
+    if (!hasInFlightRefund) return;
+
+    const interval = setInterval(() => {
+      refundsFetch.refresh();
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [hasInFlightRefund, refundsFetch]);
+
+  // Live Auto-Polling for Direct Lookup result if it is pending/processing
+  const hasInFlightDirect = useMemo(() => {
+    if (!directResult) return false;
+    if (directResult.type === "single") {
+      return (
+        directResult.item?.status === "PENDING" ||
+        directResult.item?.status === "PROCESSING"
+      );
+    }
+    if (directResult.type === "payment" && Array.isArray(directResult.list)) {
+      return directResult.list.some(
+        (r) => r.status === "PENDING" || r.status === "PROCESSING"
+      );
+    }
+    return false;
+  }, [directResult]);
+
+  useEffect(() => {
+    if (!hasInFlightDirect || !directLookupId.trim()) return;
+
+    const interval = setInterval(async () => {
+      try {
+        if (directResult.type === "single") {
+          const { refund } = await getRefund(directLookupId.trim(), apiKey);
+          if (refund) {
+            setDirectResult({ type: "single", item: refund });
+          }
+        } else if (directResult.type === "payment") {
+          const { refunds } = await getPaymentRefunds(directLookupId.trim(), apiKey);
+          if (refunds) {
+            setDirectResult({ type: "payment", list: refunds, paymentId: directLookupId.trim() });
+          }
+        }
+      } catch {
+        // silent polling catch
+      }
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [hasInFlightDirect, directLookupId, apiKey, directResult?.type]);
+
   async function handleDirectLookup(e) {
     e.preventDefault();
     const id = directLookupId.trim();
@@ -148,6 +206,12 @@ export default function RefundsPage() {
         description="Inspect reversed charges, track upstream processor refund statuses, and issue customer refunds."
         actions={
           <div className="flex items-center gap-2">
+            {hasInFlightRefund && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 border border-amber-200 animate-pulse">
+                <RefreshCw className="h-3 w-3 animate-spin text-amber-600" />
+                Live updating...
+              </span>
+            )}
             <Button
               variant="primary"
               size="sm"
@@ -486,7 +550,11 @@ export default function RefundsPage() {
       <RefundModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSuccess={() => refundsFetch.refresh()}
+        onSuccess={() => {
+          refundsFetch.refresh();
+          setTimeout(() => refundsFetch.refresh(), 1000);
+          setTimeout(() => refundsFetch.refresh(), 3000);
+        }}
       />
     </div>
   );

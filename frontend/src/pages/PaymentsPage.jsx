@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CheckCircle2, CreditCard, ExternalLink, RefreshCw, RotateCcw, Search, Send } from "lucide-react";
 import { createPayment, getPayments } from "../lib/api.js";
@@ -40,6 +40,21 @@ export default function PaymentsPage() {
   const [receipt, setReceipt] = useState(null);
   const [refundPayment, setRefundPayment] = useState(null);
   const minorAmount = toMinorUnits(form.amount, form.currency);
+
+  // Live Auto-Polling if any payment is in-flight (PENDING or PROCESSING)
+  const hasInFlightPayment = useMemo(() => {
+    return payments.some((p) => p.status === "PENDING" || p.status === "PROCESSING");
+  }, [payments]);
+
+  useEffect(() => {
+    if (!hasInFlightPayment) return;
+
+    const interval = setInterval(() => {
+      paymentsFetch.refresh();
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [hasInFlightPayment, paymentsFetch]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -391,7 +406,11 @@ export default function PaymentsPage() {
         isOpen={Boolean(refundPayment)}
         onClose={() => setRefundPayment(null)}
         payment={refundPayment}
-        onSuccess={() => paymentsFetch.refresh()}
+        onSuccess={() => {
+          paymentsFetch.refresh();
+          setTimeout(() => paymentsFetch.refresh(), 1000);
+          setTimeout(() => paymentsFetch.refresh(), 3000);
+        }}
       />
     </div>
   );

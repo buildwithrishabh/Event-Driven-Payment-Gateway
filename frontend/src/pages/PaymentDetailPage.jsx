@@ -60,6 +60,24 @@ export default function PaymentDetailPage() {
     refundsFetch.refresh();
   };
 
+  // Live Auto-Polling: poll if any refund is PENDING/PROCESSING or payment itself is in flight
+  const hasInFlightRefund = refundList.some(
+    (r) => r.status === "PENDING" || r.status === "PROCESSING"
+  );
+  const isInFlightPayment =
+    payment?.status === "PENDING" || payment?.status === "PROCESSING";
+
+  useEffect(() => {
+    if (!hasInFlightRefund && !isInFlightPayment) return;
+
+    const interval = setInterval(() => {
+      refresh();
+      refundsFetch.refresh();
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [hasInFlightRefund, isInFlightPayment]);
+
   return (
     <div className="animate-fade-in space-y-6">
       <PageHeader
@@ -67,6 +85,12 @@ export default function PaymentDetailPage() {
         description={payment ? `Reference ID ${payment._id || id}` : "Inspect transaction ledger details."}
         actions={
           <div className="flex items-center gap-2">
+            {(hasInFlightRefund || isInFlightPayment) && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 border border-amber-200 animate-pulse">
+                <RefreshCw className="h-3 w-3 animate-spin text-amber-600" />
+                Live updating...
+              </span>
+            )}
             {canRefund && (
               <Button
                 variant="danger"
@@ -445,7 +469,11 @@ export default function PaymentDetailPage() {
         isOpen={refundModalOpen}
         onClose={() => setRefundModalOpen(false)}
         payment={payment}
-        onSuccess={handleRefreshAll}
+        onSuccess={() => {
+          handleRefreshAll();
+          setTimeout(handleRefreshAll, 1000);
+          setTimeout(handleRefreshAll, 3000);
+        }}
       />
     </div>
   );
