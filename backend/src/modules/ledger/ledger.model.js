@@ -46,6 +46,21 @@ const ledgerEntrySchema = new mongoose.Schema(
   },
 );
 
+// 1. Ek paymentId ka sirf ek hi credit ho sakta hai
+ledgerEntrySchema.index(
+  { paymentId: 1, type: 1 },
+  { unique: true, partialFilterExpression: { type: "CREDIT" } },
+);
+
+// 2. Ek refundId ka sirf ek hi debit ho sakta hai
+ledgerEntrySchema.index(
+  { refundId: 1, type: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { refundId: { $type: "objectId" } },
+  },
+);
+
 // Prevent updating or deleting ledger records at the Mongoose middleware level
 ledgerEntrySchema.pre(
   ["updateOne", "updateMany", "findOneAndUpdate", "deleteOne", "deleteMany"],

@@ -14,29 +14,41 @@ export async function processOutboxBatch() {
       .limit(20);
 
     for (const event of events) {
-      if (event.eventType === "PAYMENT_CREATED") {
-        await paymentQueue.add(
-          "process-payment",
-          {
-            paymentId: event.payload.paymentId,
-            merchantId: event.payload.merchantId,
-            amount: event.payload.amount,
-            currency: event.payload.currency,
-            customerEmail: event.payload.customerEmail,
-          },
-          {
-            jobId: `pay_${event.payload.paymentId}`, // Deduplication key in BullMq
-          },
+      try {
+        if (event.eventType === "PAYMENT_CREATED") {
+          await paymentQueue.add(
+            "process-payment",
+            {
+              paymentId: event.payload.paymentId,
+              merchantId: event.payload.merchantId,
+              amount: event.payload.amount,
+              currency: event.payload.currency,
+              customerEmail: event.payload.customerEmail,
+            },
+            {
+              jobId: `pay_${event.payload.paymentId}`, // Deduplication key in BullMq
+            },
+          );
+          event.status = "PROCESSED";
+          await event.save();
+        } else if (event.eventType === "REFUND_CREATED") {
+          await refundQueue.add(
+            "process-refund",
+            { refundId: event.payload.refundId },
+            { jobId: `refund_${event.payload.refundId}` },
+          );
+          event.status = "PROCESSED";
+          await event.save();
+        }
+      } catch (eventError) {
+        console.error(
+          `Failed to relay event ${event._id}:`,
+          eventError.message,
         );
-        event.status = "PROCESSED";
-        await event.save();
-      } else if (event.eventType === "REFUND_CREATED") {
-        await refundQueue.add(
-          "process-refund",
-          { refundId: event.payload.refundId },
-          { jobId: `refund_${event.payload.refundId}` },
-        );
-        event.status = "PROCESSED";
+        event.retryCount = (event.retryCount || 0) + 1;
+        if (event.retryCount >= 3) {
+          event.status = "FAILED";
+        }
         await event.save();
       }
     }
@@ -49,5 +61,5 @@ export async function processOutboxBatch() {
 
 export function startOutboxRelay(intervalMs = 1500) {
   console.log("📬 Outbox Relay started (polling every 1.5s)");
-  setInterval(processOutboxBatch, intervalMs);
+  return setInterval(processOutboxBatch, intervalMs);
 }

@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { mongo } from "mongoose";
 import { Payment } from "./payment.model.js";
 import { OutboxEvent } from "./outbox.model.js";
 import { verifyPaymentSignature } from "../processors/razorpay.processor.js";
@@ -21,31 +21,48 @@ export async function createPayment(req, res) {
     });
   }
 
+  // Session Start
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     // 1. Payment create karo
-    const payment = await Payment.create({
-      merchantId: req.merchant._id,
-      amount,
-      currency: (currency || "INR").toUpperCase(),
-      customerEmail,
-      customerPhone: customerPhone || null,
-      status: "CREATED",
-    });
+    const [payment] = await Payment.create(
+      [
+        {
+          merchantId: req.merchant._id,
+          amount,
+          currency: (currency || "INR").toUpperCase(),
+          customerEmail,
+          customerPhone: customerPhone || null,
+          status: "CREATED",
+        },
+      ],
+      { session },
+    );
 
     // 2. Outbox Event create karo (taaki worker process kar sake)
-    await OutboxEvent.create({
-      aggregateType: "PAYMENT",
-      aggregateId: payment._id.toString(),
-      eventType: "PAYMENT_CREATED",
-      payload: {
-        paymentId: payment._id.toString(),
-        merchantId: req.merchant._id,
-        amount: payment.amount,
-        currency: payment.currency,
-        customerEmail: payment.customerEmail,
-      },
-      status: "PENDING",
-    });
+    await OutboxEvent.create(
+      [
+        {
+          aggregateType: "PAYMENT",
+          aggregateId: payment._id.toString(),
+          eventType: "PAYMENT_CREATED",
+          payload: {
+            paymentId: payment._id.toString(),
+            merchantId: req.merchant._id,
+            amount: payment.amount,
+            currency: payment.currency,
+            customerEmail: payment.customerEmail,
+          },
+          status: "PENDING",
+        },
+      ],
+      { session },
+    );
+
+    // 3. Dono documents safely DB me commit
+    await session.commitTransaction();
 
     return res.status(201).json({
       paymentId: payment._id,
@@ -56,6 +73,8 @@ export async function createPayment(req, res) {
       createdAt: payment.createdAt,
     });
   } catch (error) {
+    // Agar koi bhi error aaye to transaction rollback karo
+    await session.abortTransaction();
     console.error("Failed to create payment:", error);
 
     if (error.name === "ValidationError") {
@@ -65,6 +84,9 @@ export async function createPayment(req, res) {
     return res
       .status(500)
       .json({ error: "Failed to initiate payment transaction" });
+  } finally {
+    // Session ko close karo taaki connection leak na ho
+    session.endSession();
   }
 }
 

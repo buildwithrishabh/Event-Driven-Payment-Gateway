@@ -6,7 +6,7 @@ import { refundQueue } from "../../queues/refund.queue.js";
 
 // Request a refund and persist outbox event
 export async function createRefund({ merchantId, paymentId, amount, reason }) {
-  // 1. Fetch payment
+  // 1. Pre-validation checks
   const payment = await Payment.findOne({
     _id: paymentId,
     merchantId,
@@ -32,7 +32,6 @@ export async function createRefund({ merchantId, paymentId, amount, reason }) {
     };
   }
 
-  // Default to full refund if amount is not specified
   const currentRefunded = payment.refundedAmount || 0;
   const refundAmount = amount
     ? Number(amount)
@@ -45,55 +44,100 @@ export async function createRefund({ merchantId, paymentId, amount, reason }) {
     };
   }
 
-  const remainingRefundable = payment.amount - currentRefunded;
+  // 2. Transaction Session Start
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  if (refundAmount > remainingRefundable) {
-    throw {
-      statusCode: 400,
-      message: `Refund amount exceeds refundable balance. Remaining refundable: ${remainingRefundable}`,
-    };
+  try {
+    // 3. ATOMIC CONDITIONAL UPDATE: Sirf tabhi increment karo jab (refundedAmount + refundAmount <= amount)
+    // Ye parallel duplicate refunds ko mathematically block karta hai
+    const updatedPayment = await Payment.findOneAndUpdate(
+      {
+        _id: paymentId,
+        merchantId,
+        status: "SUCCEEDED",
+        $expr: {
+          $lte: [{ $add: ["$refundedAmount", refundAmount] }, "$amount"],
+        },
+      },
+      {
+        $inc: { refundedAmount: refundAmount },
+      },
+      { session, new: true }
+    );
+
+    if (!updatedPayment) {
+      throw {
+        statusCode: 400,
+        message:
+          "Refund amount exceeds remaining refundable balance or concurrent refund in progress.",
+      };
+    }
+
+    // Status update (FULL vs PARTIAL)
+    updatedPayment.refundStatus =
+      updatedPayment.refundedAmount === updatedPayment.amount
+        ? "FULL"
+        : "PARTIAL";
+    await updatedPayment.save({ session });
+
+    // 4. Create refund record inside session
+    const [refund] = await Refund.create(
+      [
+        {
+          merchantId,
+          paymentId: payment._id,
+          processorPaymentId,
+          amount: refundAmount,
+          currency: payment.currency,
+          reason: reason || "requested_by_customer",
+          status: "PENDING",
+        },
+      ],
+      { session }
+    );
+
+    // 5. Create Outbox Event inside session
+    await OutboxEvent.create(
+      [
+        {
+          aggregateType: "REFUND",
+          aggregateId: refund._id.toString(),
+          eventType: "REFUND_CREATED",
+          payload: {
+            refundId: refund._id.toString(),
+            paymentId: payment._id.toString(),
+            amount: refundAmount,
+            processorPaymentId: refund.processorPaymentId,
+          },
+          status: "PENDING",
+        },
+      ],
+      { session }
+    );
+
+    // 6. Commit transaction
+    await session.commitTransaction();
+
+    // 7. Fast-path BullMQ Job (Session commit hone ke baad trigger karo)
+    refundQueue
+      .add(
+        "process-refund",
+        { refundId: refund._id.toString() },
+        { jobId: `refund_${refund._id}` }
+      )
+      .catch((err) => {
+        // Outbox relay fallback is available even if this fails
+        console.warn("Direct queue add failed, outbox relay will pick it up:", err.message);
+      });
+
+    return refund;
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
   }
-
-  // 2. Create refund record in pending state
-  const refund = await Refund.create({
-    merchantId,
-    paymentId: payment._id,
-    processorPaymentId,
-    amount: refundAmount,
-    currency: payment.currency,
-    reason: reason || "requested_by_customer",
-    status: "PENDING",
-  });
-
-  // 3. Update Payment refunded amount and status
-  const newTotalRefunded = currentRefunded + refundAmount;
-  payment.refundedAmount = newTotalRefunded;
-  payment.refundStatus =
-    newTotalRefunded === payment.amount ? "FULL" : "PARTIAL";
-  await payment.save();
-
-  // 4. Record OutBox Event
-  await OutboxEvent.create({
-    aggregateType: "REFUND",
-    aggregateId: refund._id.toString(),
-    eventType: "REFUND_CREATED",
-    payload: {
-      refundId: refund._id.toString(),
-      paymentId: payment._id.toString(),
-      amount: refundAmount,
-      processorPaymentId: refund.processorPaymentId,
-    },
-    status: "PENDING",
-  });
-
-  // 5. Enqueue BullMQ Job
-  await refundQueue.add(
-    "process-refund",
-    { refundId: refund._id.toString() },
-    { jobId: `refund_${refund._id}` },
-  );
-
-  return refund;
 }
 
 export async function getRefundById(refundId, merchantId) {

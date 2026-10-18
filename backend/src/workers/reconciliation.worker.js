@@ -95,5 +95,5 @@ export async function runReconciliationSweep() {
 
 export function startReconciliationWorker(intervalMs = 60000) {
   console.log(`⏱️ Reconciliation worker active (running every ${intervalMs / 1000}s)`);
-  setInterval(runReconciliationSweep, intervalMs);
+  return setInterval(runReconciliationSweep, intervalMs);
 }
