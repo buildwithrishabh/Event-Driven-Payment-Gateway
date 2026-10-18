@@ -5,10 +5,12 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-Replica_Set-47A248?style=flat-square&logo=mongodb)](https://www.mongodb.com/)
 [![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis)](https://redis.io/)
 [![BullMQ](https://img.shields.io/badge/BullMQ-v6-FF4438?style=flat-square)](https://bullmq.io/)
+[![Prometheus](https://img.shields.io/badge/Prometheus-v2.51.0-E6522C?style=flat-square&logo=prometheus)](https://prometheus.io/)
+[![Grafana](https://img.shields.io/badge/Grafana-v10.4.1-F46800?style=flat-square&logo=grafana)](https://grafana.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)](https://www.docker.com/)
 
-> **A production-grade, distributed fintech engine that guarantees zero double-charges, zero lost events, and mathematically immutable financial balances.**  
-> Built with Node.js (Express 5), MongoDB Replica Sets, Redis, BullMQ, Razorpay SDK, and a React 18 Merchant Dashboard.
+> **A production-grade, distributed fintech engine that guarantees zero double-charges, zero lost events, mathematically immutable financial balances, and full-stack Prometheus/Grafana observability.**  
+> Built with Node.js (Express 5), MongoDB Replica Sets, Redis, BullMQ, Razorpay SDK, Prometheus, Grafana, and a React 18 Merchant Dashboard.
 
 ---
 
@@ -33,12 +35,13 @@ In typical web apps, handling payments with naive CRUD operations (`merchant.bal
 | **Corrupted Account Balances** | **Strictly Append-Only Double-Entry Ledger**: No mutable balance column exists. Balances are derived on-the-fly via MongoDB aggregation pipelines (`Credits - Debits`). Deletes & updates are blocked at the driver level. |
 | **Lost or Dropped Webhooks** | **Self-Healing Reconciliation Sweeper**: Background worker actively queries the upstream processor for orphaned `PROCESSING` payments and settles them automatically. |
 | **Failed Partial Refunds** | **Saga / Compensating Rollbacks**: Pre-reserves refundable amounts, invokes the processor, and automatically restores balance if all retries fail. |
+| **Blind Spots & Silent Worker Failures** | **End-to-End Observability**: Custom Prometheus metrics for queue depths, outbox lag, HTTP latency histograms, and pre-provisioned Grafana monitoring dashboards. |
 
 ---
 
 ## 🗺️ System Architecture at a Glance
 
-The following diagram illustrates how an end-to-end payment moves through the gateway, outbox relay, background workers, ledger, and customer checkout:
+The following diagram illustrates how an end-to-end payment moves through the gateway, outbox relay, background workers, ledger, customer checkout, and real-time observability telemetry:
 
 ```mermaid
 flowchart TB
@@ -52,6 +55,7 @@ flowchart TB
         AuthMW["Auth Middleware\n(SHA-256 + Redis Cache)"]
         IdempMW["Distributed Idempotency\n(Redis SET NX)"]
         HTTPHandler["Route Controllers\n(< 50ms Response)"]
+        MetricsRoute["Metrics Scrape\n(GET /metrics)"]
     end
 
     subgraph DataTier["3. Storage & Event Backbone"]
@@ -69,6 +73,11 @@ flowchart TB
 
     subgraph Processor["5. External Payment Processor"]
         RazorpayAPI["Razorpay Payment Gateway"]
+    end
+
+    subgraph Observability["6. Real-Time Observability Stack"]
+        Prometheus["Prometheus (v2.51.0)\n(Port 9090 - Scrapes /metrics)"]
+        Grafana["Grafana Dashboards (v10.4.1)\n(Port 3001 - Pre-provisioned)"]
     end
 
     %% Ingress flows
@@ -103,6 +112,11 @@ flowchart TB
     ReconWorker -->|Find Stuck Payments| MongoReplica
     ReconWorker -->|Verify Status| RazorpayAPI
     ReconWorker -->|Append CREDIT Entry| MongoReplica
+
+    %% Observability flows
+    HTTPHandler --> MetricsRoute
+    MetricsRoute -.->|Scrapes Metrics| Prometheus
+    Prometheus -->|Datasource| Grafana
 ```
 
 ---
@@ -137,7 +151,7 @@ You can run the entire system via **Docker Compose** (recommended for instant se
 
 ### Option 1: Fast-Track with Docker Compose (Recommended)
 
-Everything (MongoDB 7 Replica Set, Redis 7, and Node.js Backend) runs in isolated containers:
+Everything (**MongoDB 7 Replica Set**, **Redis 7**, **Node.js Backend**, **Prometheus v2.51**, and **Grafana v10.4**) runs in isolated containers:
 
 ```bash
 # 1. Clone the repository
@@ -148,12 +162,15 @@ cd "Event-Driven Payment Gateway & Ledger Engine"
 cp backend/.env.example backend/.env
 # Edit backend/.env and provide your RAZORPAY_KEY_ID & RAZORPAY_KEY_SECRET
 
-# 3. Start infrastructure and backend
+# 3. Start infrastructure, backend, and monitoring stack
 cd backend
 docker compose up --build
 ```
 
-The gateway will automatically initialize MongoDB replica set `rs0`, connect to Redis, and listen at `http://localhost:3000`.
+The gateway will automatically initialize MongoDB replica set `rs0`, connect to Redis, and spin up services:
+- **Payment Gateway API**: `http://localhost:3000`
+- **Prometheus Telemetry Scraper**: `http://localhost:9090`
+- **Grafana Live Dashboards**: `http://localhost:3001` (Pre-configured login: `admin` / `admin`)
 
 ---
 
@@ -204,6 +221,48 @@ cp .env.example .env
 npm run dev
 ```
 > Open `http://localhost:5173` in your browser.
+
+---
+
+## 📊 Real-Time Observability & Monitoring (Prometheus + Grafana)
+
+The gateway engine includes an enterprise-grade observability stack built on Prometheus and Grafana. No manual setup or UI dashboard configuration is required—everything is provisioned automatically via Docker Compose.
+
+```
+┌─────────────────────────────────┐        Scrapes /metrics        ┌───────────────────────────┐
+│ Express 5 Engine & BullMQ Workers├───────────────────────────────► Prometheus (Port 9090)    │
+│  - Runtime & Node.js metrics    │          every 15s            │  - Scrapes backend:3000   │
+│  - Custom fintech counters      │                               │  - Stores time-series data│
+│  - Histogram latency buckets    │                               └─────────────┬─────────────┘
+└─────────────────────────────────┘                                             │
+                                                                                │ Datasource Query
+                                                                                ▼
+                                                                  ┌───────────────────────────┐
+                                                                  │ Grafana (Port 3001)       │
+                                                                  │  - "⚡ Payment Gateway"    │
+                                                                  │  - Zero-config Dashboard  │
+                                                                  └───────────────────────────┘
+```
+
+### 📈 Core Metrics Tracked
+
+| Metric Name | Type | Labels | Description / Alert Value |
+| :--- | :---: | :--- | :--- |
+| `payment_gw_outbox_pending_events` | **Gauge** | — | Pending unpublished events in MongoDB outbox collection. Highlights outbox relay lag (>20 indicates worker stall). |
+| `payment_gw_queue_jobs` | **Gauge** | `queue`, `status` | Active, waiting, completed, failed, and delayed job counts across `payment-process`, `refund-processing-queue`, and `webhook-delivery`. |
+| `payment_gw_payments_total` | **Counter** | `status`, `currency` | Total count of processed payments partitioned by terminal state (`SUCCEEDED`, `FAILED`). |
+| `payment_gw_refunds_total` | **Counter** | `status` | Total count of processed refunds partitioned by state (`SUCCEEDED`, `FAILED`). |
+| `payment_gw_webhooks_total` | **Counter** | `status` | Total count of HMAC-signed outbound merchant webhooks dispatched (`SUCCESS`, `FAILED`). |
+| `payment_gw_http_request_duration_seconds` | **Histogram** | `method`, `route`, `status_code` | HTTP API request latency duration with granular buckets (`0.05s`, `0.1s`, `0.25s`, `0.5s`, `1s`, `2.5s`, `5s`). Used for P50, P95, and P99 percentiles. |
+| `payment_gw_nodejs_*` | **Default** | — | Node.js process health: Heap memory used/total, active event-loop lag, active libuv handles, and CPU utilization. |
+
+### 🖥️ Provisioned Grafana Dashboard Panels (`http://localhost:3001`)
+
+The pre-provisioned dashboard (**"⚡ Payment Gateway Engine"**) is organized into 4 critical operational rows:
+1. **Core Engine Status & Metrics**: Live gauges and stats for Outbox Pending Events (with color-coded green/yellow/red alert thresholds), Total Processed Payments, Processed Refunds, and Webhook Deliveries.
+2. **BullMQ Queue Depth**: Stacked time-series graph displaying waiting and active jobs across all 3 distributed queues.
+3. **HTTP API Performance**: Real-time HTTP requests-per-second (RPS) by route and P95 / P99 latency percentile curves.
+4. **Node.js Runtime Health**: V8 Heap memory utilization (MB) and Event Loop Lag (ms) to detect memory leaks or synchronous blocking.
 
 ---
 
@@ -294,6 +353,7 @@ All amounts are integers in **minor units** (e.g. `10000` = ₹100.00).
 | Method | Endpoint | Auth | Idempotency | Description |
 | :--- | :--- | :---: | :---: | :--- |
 | `GET` | `/health` | Public | No | Health check & Redis connectivity |
+| `GET` | `/metrics` | Public | No | Prometheus telemetry scrape endpoint |
 | `POST` | `/v1/merchants` | Public | No | Merchant onboarding & API key generation |
 | `GET` | `/v1/merchants/me` | `x-api-key` | No | Fetch authenticated merchant profile |
 | `POST` | `/v1/payments` | `x-api-key` | **Required** | Ingest payment & write outbox event |
@@ -322,18 +382,31 @@ Event-Driven Payment Gateway & Ledger Engine/
 │
 ├── backend/                         # Express 5 + BullMQ backend service
 │   ├── Dockerfile                   # Production container definition
-│   ├── docker-compose.yml           # Automated Mongo replica set + Redis + Backend stack
+│   ├── docker-compose.yml           # Multi-container stack (Mongo RS, Redis, Backend, Prometheus, Grafana)
 │   ├── package.json                 # Dependencies & scripts
+│   ├── monitoring/                  # Observability infrastructure provisioning
+│   │   ├── prometheus/
+│   │   │   └── prometheus.yaml      # Scrape targets & intervals (backend:3000)
+│   │   └── grafana/
+│   │       └── provisioning/
+│   │           ├── datasources/
+│   │           │   └── prometheus.yaml # Automatic Prometheus datasource setup
+│   │           └── dashboards/
+│   │               ├── dashboard.yaml  # Dashboards loader configuration
+│   │               └── definitions/
+│   │                   └── payment_engine.json # Pre-built Grafana visual dashboard
 │   └── src/
-│       ├── app.js                   # Express server, security middlewares, routing
+│       ├── app.js                   # Express server, graceful shutdown, metrics route
 │       ├── config/
 │       │   ├── db.js                # MongoDB connection handler
 │       │   ├── redis.js             # ioredis client singleton
 │       │   ├── razorpay.js          # Razorpay SDK client
-│       │   └── logger.js            # Winston structured logger
+│       │   ├── logger.js            # Winston structured logger
+│       │   └── metrics.js           # prom-client Prometheus metrics registry
 │       ├── middleware/
 │       │   ├── auth.js              # x-api-key verification & Redis cache (TTL 300s)
 │       │   ├── idempotency.js       # Atomic lock (SET NX) & response replay cache
+│       │   ├── error.middleware.js  # Express 5 centralized error & 404 handler
 │       │   └── morgan.middleware.js # HTTP request logging
 │       ├── modules/
 │       │   ├── merchants/           # Merchant registration & profile
@@ -345,8 +418,8 @@ Event-Driven Payment Gateway & Ledger Engine/
 │       │   └── webhooks/            # Inbound webhook receiver & raw body parser
 │       ├── queues/                  # BullMQ queue declarations (payment, refund, webhook)
 │       └── workers/                 # Asynchronous background workers
-│           ├── outbox.relay.js      # Polling relay: Mongo outbox -> BullMQ queues
-│           ├── payment.worker.js    # Concurrency 5: Creates Razorpay orders
+│           ├── outbox.relay.js      # Polling relay: Mongo outbox -> BullMQ queues (tracks lag)
+│           ├── payment.worker.js    # Concurrency 5: Creates Razorpay orders & increments counters
 │           ├── refund.worker.js     # Concurrency 5: Executes refunds & ledger debits
 │           ├── webhook.worker.js    # Concurrency 10: Signs HMAC & posts to merchants
 │           └── reconciliation.worker.js # Sweeper: Heals stuck payments every 60s
@@ -408,9 +481,14 @@ VITE_API_BASE_URL=http://localhost:3000
    Storing mutable balances (`balance = balance + 100`) leads to irrecoverable race conditions and destroys historical auditability. By deriving balances from append-only journal entries, the ledger is mathematically incorruptible.
 4. **Why Transactional Outbox instead of direct BullMQ enqueue?**  
    If the HTTP server loses power after writing to MongoDB but before enqueueing to Redis, the job is permanently lost. Writing an `outboxevent` in the database guarantees at-least-once delivery.
+5. **Why Full-Stack Prometheus + Grafana Observability?**  
+   In distributed asynchronous architectures, silent worker stalls and outbox backlogs can go unnoticed without telemetry. Integrating `prom-client` with a provisioned Grafana dashboard provides immediate visual alerts on queue depths, outbox lag, and API latency percentiles.
+6. **Graceful Shutdown & Resilience**:  
+   On receiving `SIGINT` or `SIGTERM`, the gateway closes HTTP listener sockets, terminates recurring polling sweepers, and cleanly terminates Redis and MongoDB connections without dropping in-flight transactions.
 
 ---
 
 ## 📄 License & Contributing
 
 Built for high-scale, fault-tolerant financial engineering. Open for educational, portfolio, and commercial reference. PRs and architecture discussions are welcome!
+

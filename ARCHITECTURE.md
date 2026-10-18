@@ -8,7 +8,7 @@
 
 1. [Executive Summary & Mental Model](#1-executive-summary--mental-model)
 2. [High-Level System Topology Diagram](#2-high-level-system-topology-diagram)
-3. [The 7 Core Architectural Pillars](#3-the-7-core-architectural-pillars)
+3. [The 9 Core Architectural Pillars](#3-the-9-core-architectural-pillars)
    - [Pillar 1: Two-Tier Distributed Idempotency](#pillar-1-two-tier-distributed-idempotency)
    - [Pillar 2: Transactional Outbox Pattern](#pillar-2-transactional-outbox-pattern)
    - [Pillar 3: Worker Concurrency & Atomic Task Claims](#pillar-3-worker-concurrency--atomic-task-claims)
@@ -16,6 +16,8 @@
    - [Pillar 5: Asynchronous Refund Engine with Compensating Rollbacks](#pillar-5-asynchronous-refund-engine-with-compensating-rollbacks)
    - [Pillar 6: Self-Healing Reconciliation Engine](#pillar-6-self-healing-reconciliation-engine)
    - [Pillar 7: Cryptographic Webhook Security (Inbound & Outbound)](#pillar-7-cryptographic-webhook-security-inbound--outbound)
+   - [Pillar 8: Full-Stack Observability & Telemetry (Prometheus & Grafana)](#pillar-8-full-stack-observability--telemetry-prometheus--grafana)
+   - [Pillar 9: Production Resilience, Graceful Shutdown & Centralized Error Architecture](#pillar-9-production-resilience-graceful-shutdown--centralized-error-architecture)
 4. [End-to-End Execution Sequence Diagrams](#4-end-to-end-execution-sequence-diagrams)
    - [Flow 1: Payment Ingestion & Fast API Return](#flow-1-payment-ingestion--fast-api-return)
    - [Flow 2: Outbox Polling & Upstream Order Creation](#flow-2-outbox-polling--upstream-order-creation)
@@ -24,6 +26,7 @@
    - [Flow 5: Partial / Full Refund Lifecycle with Saga Rollback](#flow-5-partial--full-refund-lifecycle-with-saga-rollback)
    - [Flow 6: Autonomous Reconciliation Sweep](#flow-6-autonomous-reconciliation-sweep)
    - [Flow 7: Outbound Webhook Delivery with Exponential Backoff](#flow-7-outbound-webhook-delivery-with-exponential-backoff)
+   - [Flow 8: Prometheus Telemetry Scraping & Grafana Dashboard Rendering](#flow-8-prometheus-telemetry-scraping--grafana-dashboard-rendering)
 5. [State Machines & Entity Lifecycles](#5-state-machines--entity-lifecycles)
    - [Payment State Machine](#payment-state-machine)
    - [Refund State Machine](#refund-state-machine)
@@ -60,6 +63,7 @@ To understand this system on the first read, picture it as three distinct, loose
 │  - Balance is calculated dynamically: SUM(Credits) - SUM(Debits).      │
 │  - Background sweeper heals lost or abandoned payments every 60s.      │
 │  - Outbound webhooks dispatch HMAC-signed events to merchants.         │
+│  - Telemetry scraped via Prometheus & visualized live in Grafana.      │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -67,6 +71,7 @@ To understand this system on the first read, picture it as three distinct, loose
 1. **Synchronous Upstream HTTP Calls**: Calling Stripe/Razorpay inside the API route ties up HTTP server threads. If the upstream takes 8 seconds or times out, the client crashes or retries, causing duplicate charges.
 2. **Dual-Write Vulnerability**: Saving to a database and then calling a message queue are two separate operations. If the server crashes between them, the payment is orphaned forever.
 3. **In-Place Balance Mutation**: Doing `merchant.balance += amount` destroys auditability. If a bug occurs, there is no way to mathematically prove why a balance is what it is.
+4. **Blind Worker Failures**: Without custom metrics and queue lag telemetry, backlogs and stuck jobs can silently stall transactions unnoticed.
 
 ---
 
@@ -85,6 +90,7 @@ flowchart TB
         AuthMiddleware["Auth Middleware\n(SHA-256 Hash + Redis Cache)"]
         IdempMiddleware["Idempotency Middleware\n(Redis SET NX + Replay Cache)"]
         RawBodyParser["Raw Body Parser\n(Preserves raw bytes for HMAC)"]
+        MetricsEndpoint["Metrics Route\n(GET /metrics)"]
     end
 
     subgraph InMemory["In-Memory Tier (Redis 7)"]
@@ -108,6 +114,11 @@ flowchart TB
         RefundWorker["Refund Worker\n(Concurrency: 5)"]
         ReconSweeper["Reconciliation Sweeper\n(Runs every 60s)"]
         WebhookWorker["Webhook Worker\n(Concurrency: 10)"]
+    end
+
+    subgraph Observability["Telemetry & Observability Stack"]
+        PrometheusServer["Prometheus Server (v2.51.0)\n(Scrapes backend:3000/metrics)"]
+        GrafanaServer["Grafana Dashboard (v10.4.1)\n(Port 3001: Payment Engine)"]
     end
 
     subgraph External["External Services"]
@@ -156,11 +167,16 @@ flowchart TB
     WebhookWorker -->|"Sign HMAC-SHA256"| WebhookWorker
     WebhookWorker -->|"Dispatch POST"| MerchantServer
     WebhookWorker -->|"Log attempt"| ColWebhookLogs
+
+    %% Observability Scrapes & Queries
+    HTTPRouter --> MetricsEndpoint
+    MetricsEndpoint -.->|"Scrapes every 15s"| PrometheusServer
+    PrometheusServer -->|"Visualized in"| GrafanaServer
 ```
 
 ---
 
-## 3. The 7 Core Architectural Pillars
+## 3. The 9 Core Architectural Pillars
 
 ### Pillar 1: Two-Tier Distributed Idempotency
 - **Source Code**: [backend/src/middleware/idempotency.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/middleware/idempotency.js)
@@ -372,6 +388,89 @@ const pipeline = [
   - `x-signature: sha256=<signature>`
   - `x-event: payment.succeeded`
 - Delivery attempts, status codes, and latency are recorded in `webhookdeliveries` for audit logging. If the merchant server fails, BullMQ retries up to 5 times.
+
+---
+
+### Pillar 8: Full-Stack Observability & Telemetry (Prometheus & Grafana)
+- **Source Code**: [metrics.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/config/metrics.js), [docker-compose.yml](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/docker-compose.yml), [prometheus.yaml](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/monitoring/prometheus/prometheus.yaml), [payment_engine.json](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/monitoring/grafana/provisioning/dashboards/definitions/payment_engine.json)
+
+In distributed, event-driven payment pipelines, failures are often asynchronous and invisible to client-facing HTTP response codes. An Outbox relay might stall, BullMQ workers might back up under load, or upstream payment gateway response times might degrade without throwing explicit 500 errors. 
+
+To guarantee production visibility, the engine integrates an autonomous, pull-based telemetry stack:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        CORE TELEMETRY PIPELINE                         │
+│                                                                        │
+│   [HTTP Gateway Ingress]  ──► httpRequestDuration Histogram            │
+│   [Payments Worker]       ──► paymentCounter (status, currency)        │
+│   [Refunds Worker]        ──► refundCounter (status)                   │
+│   [Webhooks Worker]       ──► webhookCounter (status)                  │
+│   [Outbox Relay Poller]   ──► outboxLagGauge (pending count)           │
+│   [BullMQ Engine]         ──► queueJobGauge (waiting/active/delayed)   │
+│   [Node.js V8 Engine]     ──► collectDefaultMetrics (heap/CPU/lag)     │
+│                                           │                            │
+│                                           ▼                            │
+│                         ┌───────────────────────────────────┐          │
+│                         │  GET /metrics (prom-client Reg)   │          │
+│                         └─────────────────┬─────────────────┘          │
+└───────────────────────────────────────────┼────────────────────────────┘
+                                            │ Scrapes every 15s
+                                            ▼
+                              ┌───────────────────────────┐
+                              │ Prometheus Server (v2.51) │
+                              └─────────────┬─────────────┘
+                                            │ PromQL Query
+                                            ▼
+                              ┌───────────────────────────┐
+                              │ Grafana Dashboard (v10.4) │
+                              │ ("⚡ Payment Gateway")     │
+                              └───────────────────────────┘
+```
+
+#### Telemetry Components & Guarantees:
+1. **Dynamic BullMQ Scraping (`updateQueueMetrics`)**:
+   Instead of running CPU-intensive polling loops for queue depths, BullMQ job statistics (`waiting`, `active`, `completed`, `failed`, `delayed`) across `payment-process`, `refund-processing-queue`, and `webhook-delivery` are queried atomically right when Prometheus initiates a `/metrics` scrape.
+2. **Outbox Relay Lag Monitoring**:
+   Every 1.5s outbox polling cycle sets `payment_gw_outbox_pending_events`. In Grafana, this gauge is mapped to color thresholds: **Green (0-4)**, **Yellow (5-19)**, and **Red (≥20)**, signaling an immediate operational alert if worker dispatch stalls.
+3. **High-Resolution Latency Profiling**:
+   The HTTP duration histogram partitions requests into sub-100ms buckets (`0.05, 0.1, 0.25, 0.5, 1, 2.5, 5` seconds). This enables exact PromQL calculations of P50, P95, and P99 latencies without degrading API performance. Scrapes to `/metrics` and `/health` are filtered out to avoid polluting latency graphs.
+4. **Zero-Configuration Provisioning**:
+   The `docker-compose.yml` mounts provisioning YAML files into Grafana container directories. Prometheus datasources and the comprehensive 7-panel visual dashboard load automatically on startup without requiring manual UI configuration.
+
+---
+
+### Pillar 9: Production Resilience, Graceful Shutdown & Centralized Error Architecture
+- **Source Code**: [app.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/app.js), [error.middleware.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/middleware/error.middleware.js)
+
+#### 1. Graceful Shutdown & Signal Trapping
+In distributed cloud container environments (e.g., Docker, Kubernetes rolling updates, PM2), abrupt container termination causes dropped HTTP connections, lost Redis locks, and orphaned database transactions.
+
+The gateway binds process listeners for `SIGTERM` and `SIGINT` to enforce a strict 4-step teardown protocol:
+
+```
+[Received SIGTERM / SIGINT]
+           │
+           ▼
+1. server.close() ─────────────────► Rejects new HTTP requests; finishes active in-flight requests
+           │
+           ▼
+2. Clear Polling Timers ──────────► Cancels outboxTimer (1.5s) & reconciliationTimer (60s)
+           │
+           ▼
+3. Close MongoDB Connection ──────► mongoose.connection.close(false) flushes pending writes
+           │
+           ▼
+4. Close Redis Client ────────────► redisClient.quit() gracefully unlinks connection & exits (0)
+```
+
+#### 2. Centralized Express 5 Error Architecture
+With Express 5, all rejected promises in route controllers propagate directly to the global error middleware without requiring wrapping `try/catch` or `express-async-errors`:
+- **Schema Validation Errors (`ValidationError`)**: Formats Mongoose schema rejections into `{ error: "Validation Error", details: [...] }` with HTTP 400.
+- **Type Casting Errors (`CastError`)**: Traps invalid MongoDB ObjectIds (e.g. malformed `paymentId`) with `{ error: "Invalid format for field: <path>" }` (HTTP 400).
+- **Malformed JSON Payloads**: Intercepts `SyntaxError` from Express `express.json()` parser and returns `{ error: "Malformed JSON in request body" }` (HTTP 400) instead of raw server crashes.
+- **Production Information Masking**: In `NODE_ENV === "production"`, unhandled 500 exceptions return `{ error: "Internal Server Error" }` to prevent database and path leaks, while Winston logs the full stack trace to disk for debugging.
+- **Uniform 404 Handler (`notFoundHandler`)**: Unmatched routes return `{ error: "Route not found: METHOD /path" }` with HTTP 404.
 
 ---
 
@@ -614,6 +713,31 @@ sequenceDiagram
 
 ---
 
+### Flow 8: Prometheus Telemetry Scraping & Grafana Dashboard Rendering
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Prom as Prometheus (Scrapes every 15s)
+    participant GW as Gateway API (/metrics)
+    participant Metrics as Metrics Registry (prom-client)
+    participant BullMQ as BullMQ Queues (payment/refund/webhook)
+    participant Grafana as Grafana Dashboard (:3001)
+
+    Prom->>GW: GET /metrics (HTTP scrape request)
+    GW->>Metrics: updateQueueMetrics()
+    Metrics->>BullMQ: getJobCounts("waiting", "active", "completed", "failed", "delayed")
+    BullMQ-->>Metrics: Return real-time job counts
+    Metrics->>Metrics: queueJobGauge.set({ queue, status }, count)
+    Metrics-->>GW: Rendered Prometheus metric vector text
+    GW-->>Prom: HTTP 200 OK (Content-Type: text/plain; version=0.0.4)
+    Grafana->>Prom: PromQL Query (e.g. rate(payment_gw_http_request_duration_seconds_sum[1m]))
+    Prom-->>Grafana: Time-series query result
+    Grafana->>Grafana: Render real-time visual charts & status panels
+```
+
+---
+
 ## 5. State Machines & Entity Lifecycles
 
 ### Payment State Machine
@@ -662,6 +786,8 @@ stateDiagram-v2
 | **6** | **Bug attempts to mutate past ledger entry** | Unauthorized code or database mutation | Mongoose pre-hook guard | Schema hooks intercept `updateOne`, `deleteMany`, etc., throwing `LEDGER_IMMUTABILITY_VIOLATION`. |
 | **7** | **Processor rejects partial refund** | Card expired or bank account closed | Compensating Saga Rollback | Worker catches terminal failure, decrements `payment.refundedAmount`, and restores refundable balance. |
 | **8** | **Redis restarts unexpectedly** | Redis memory flush or container reboot | MongoDB Source-of-Truth | BullMQ reconnects automatically. Outbox relay re-polls any pending events from MongoDB. |
+| **9** | **Worker backlog / Outbox relay stall** | Network partition or excessive burst traffic | Prometheus gauges & Grafana threshold alert | `payment_gw_outbox_pending_events` triggers red alert (≥20); workers auto-recover upon re-establishing connection. |
+| **10** | **Container termination / Rolling deploy** | SIGTERM from Docker/Kubernetes/PM2 | Graceful Shutdown sequence in `app.js` | Stops accepting new HTTP connections, cancels background intervals, and cleanly drains DB and Redis connections. |
 
 ---
 
@@ -671,13 +797,15 @@ Direct clickable links to implementation files in the repository:
 
 | Functional Area | Source Code Link | Primary Role |
 | :--- | :--- | :--- |
-| **Server Entrypoint** | [app.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/app.js) | Express 5 setup, security headers, raw body parser, and route mounting |
+| **Server Entrypoint** | [app.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/app.js) | Express 5 setup, graceful shutdown signal trapping, and route mounting |
+| **Metrics Registry** | [metrics.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/config/metrics.js) | prom-client counters, gauges, histograms, and dynamic BullMQ scraper |
+| **Centralized Error Middleware** | [error.middleware.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/middleware/error.middleware.js) | Mongoose validation, CastError, malformed JSON, and 404 interceptor |
 | **Redis Singleton** | [redis.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/config/redis.js) | ioredis client configuration and connection event listeners |
 | **Database Connection** | [db.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/config/db.js) | Mongoose replica set connection handler |
 | **API Authentication** | [auth.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/middleware/auth.js) | `x-api-key` SHA-256 hashing and Redis caching (TTL 300s) |
 | **Distributed Idempotency** | [idempotency.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/middleware/idempotency.js) | Atomic `SET NX` locks and 24-hour response replay |
 | **Payment Ingestion** | [payment.controller.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/payments/payment.controller.js) | Validates input, saves payment + outbox event (< 50ms response) |
-| **Outbox Relay** | [outbox.relay.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/outbox.relay.js) | Polls pending outbox records every 1.5s and enqueues to BullMQ |
+| **Outbox Relay** | [outbox.relay.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/outbox.relay.js) | Polls pending outbox records every 1.5s, updates lag gauge, enqueues to BullMQ |
 | **Payment Worker** | [payment.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/payment.worker.js) | Claims jobs atomically, invokes Razorpay SDK, updates order ID |
 | **Double-Entry Ledger Model** | [ledger.model.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.model.js) | Blocks updates & deletes with `LEDGER_IMMUTABILITY_VIOLATION` |
 | **Dynamic Balance Service** | [ledger.service.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.service.js) | Aggregation pipeline calculating `SUM(Credits) - SUM(Debits)` |
@@ -685,3 +813,7 @@ Direct clickable links to implementation files in the repository:
 | **Reconciliation Sweeper** | [reconciliation.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/reconciliation.worker.js) | Sweeps stuck payments older than 3 minutes every 60 seconds |
 | **Webhook Delivery Worker** | [webhook.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/webhook.worker.js) | Signs HMAC-SHA256 headers and executes HTTP POST with retries |
 | **Hosted Checkout Portal** | [CheckoutPage.jsx](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/frontend/src/pages/CheckoutPage.jsx) | Customer interface triggering the Razorpay Checkout Modal |
+| **Prometheus Scrape Config** | [prometheus.yaml](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/monitoring/prometheus/prometheus.yaml) | 15s scrape interval config targeting `backend:3000` |
+| **Grafana Dashboard JSON** | [payment_engine.json](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/monitoring/grafana/provisioning/dashboards/definitions/payment_engine.json) | 7-panel Grafana dashboard definition for engine metrics |
+| **Multi-Service Compose** | [docker-compose.yml](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/docker-compose.yml) | Orchestrates Mongo RS, Redis, Backend, Prometheus, and Grafana |
+
