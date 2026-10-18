@@ -1,673 +1,616 @@
 # ⚡ Event-Driven Payment Gateway & Ledger Engine
 
-> An enterprise-grade, distributed payment gateway, customer checkout engine, append-only financial ledger, and asynchronous refund processing platform. Engineered with **Node.js (Express 5)**, **MongoDB (ACID Replica Set)**, **Redis**, **BullMQ**, **Razorpay**, and a **React 18 + Tailwind CSS** merchant console.
-
-[![Node.js](https://img.shields.io/badge/Node.js-20.x-green.svg)](https://nodejs.org/)
-[![Express](https://img.shields.io/badge/Express-5.x-blue.svg)](https://expressjs.com/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Replica_Set_ACID-success.svg)](https://www.mongodb.com/)
-[![Redis](https://img.shields.io/badge/Redis-BullMQ-red.svg)](https://redis.io/)
-[![Frontend](https://img.shields.io/badge/Frontend-React_18_+_Vite_+_Tailwind-purple.svg)](./frontend)
-[![License](https://img.shields.io/badge/License-ISC-purple.svg)](./backend/package.json)
+> An asynchronous, fault-tolerant payment gateway, customer checkout platform, append-only financial ledger, and refund engine. Built with **Node.js (Express 5)**, **MongoDB (Replica Set)**, **Redis**, **BullMQ**, **Razorpay**, and a **React 18 + Tailwind CSS** merchant dashboard.
 
 ---
 
 ## 📑 Table of Contents
-1. [Overview & Core Mission](#-overview--core-mission)
-2. [The 7 Architectural Pillars](#-the-7-architectural-pillars)
-3. [System Architecture Diagram](#-system-architecture-diagram)
-4. [Comprehensive File-by-File & Directory Guide](#-comprehensive-file-by-file--directory-guide)
-   - [Backend Core Architecture (File Breakdown)](#backend-core-architecture-file-breakdown)
-   - [Frontend Architecture (File Breakdown)](#frontend-architecture-file-breakdown)
-5. [End-to-End Execution Flows](#-end-to-end-execution-flows)
-   - [Flow 1: Sub-40ms Idempotent Payment Ingestion](#flow-1-sub-40ms-idempotent-payment-ingestion)
-   - [Flow 2: Outbox Relay & BullMQ Worker Processing](#flow-2-outbox-relay--bullmq-worker-processing)
-   - [Flow 3: Customer Checkout & Cryptographic HMAC Verification](#flow-3-customer-checkout--cryptographic-hmac-verification)
-   - [Flow 4: Append-Only Immutable Double-Entry Ledger](#flow-4-append-only-immutable-double-entry-ledger)
-   - [Flow 5: Asynchronous Refund Engine & Ledger Reversal](#flow-5-asynchronous-refund-engine--ledger-reversal)
-   - [Flow 6: Self-Healing Reconciliation Sweeper](#flow-6-self-healing-reconciliation-sweeper)
-   - [Flow 7: Outbound Webhook Delivery with Exponential Retries](#flow-7-outbound-webhook-delivery-with-exponential-retries)
-6. [API Reference & cURL Cheatsheet](#-api-reference--curl-cheatsheet)
-7. [Local Setup & Getting Started](#-local-setup--getting-started)
-8. [Architectural Deep Dive](#-architectural-deep-dive)
+
+- [Overview](#-overview)
+- [Key Features](#-key-features)
+- [Tech Stack](#-tech-stack)
+- [Project Directory Structure](#-project-directory-structure)
+- [Prerequisites & Environment Variables](#-prerequisites--environment-variables)
+  - [Backend Environment Variables](#backend-environment-variables)
+  - [Frontend Environment Variables](#frontend-environment-variables)
+- [Step-by-Step Setup & Running](#-step-by-step-setup--running)
+  - [1. Infrastructure (MongoDB & Redis)](#1-infrastructure-mongodb--redis)
+  - [2. Backend Setup](#2-backend-setup)
+  - [3. Frontend Setup](#3-frontend-setup)
+- [API Reference](#-api-reference)
+  - [Authentication](#authentication)
+  - [Idempotency](#idempotency)
+  - [Health Check](#health-check)
+  - [Merchant Endpoints](#merchant-endpoints)
+  - [Payment Endpoints](#payment-endpoints)
+  - [Checkout Endpoints (Public)](#checkout-endpoints-public)
+  - [Ledger Endpoints](#ledger-endpoints)
+  - [Refund Endpoints](#refund-endpoints)
+  - [Inbound Webhook Endpoint](#inbound-webhook-endpoint)
+- [Core Architectural Mechanisms](#-core-architectural-mechanisms)
+- [Missing & Incomplete Functionality](#-missing--incomplete-functionality)
 
 ---
 
-## 💡 Overview & Core Mission
+## 💡 Overview
 
-Payment and fintech platforms operate in environments where failure is inevitable: servers reboot unexpectedly, mobile clients lose internet connectivity midway through checkout, upstream processor APIs experience transient timeouts, and webhooks arrive out of sequence or repeatedly.
+In financial software, standard synchronous operations and in-place database balance updates (`balance = balance + amount`) lead to severe vulnerabilities: double charges upon network retries, race conditions during high concurrency, and data corruption when services crash mid-request.
 
-A naive payment integration that mutates database balances directly (`balance += amount`) or dispatches message queue events after saving a database record introduces **catastrophic financial bugs**:
-- **Double Charges:** A customer clicks "Pay Now" twice, charging their credit card twice.
-- **Dual-Write Hazard:** The database transaction succeeds, but the message broker crashes before receiving the event, permanently orphaning the order.
-- **Ledger Inconsistency:** Modifying balances in-place leaves zero historical trace of changes, rendering forensic financial audits impossible.
-- **Lost Transactions:** A customer successfully pays on Razorpay but closes the browser before redirection, leaving the payment stuck in `PROCESSING` forever.
-
-**This engine solves all of these problems through distributed systems patterns:**
-- 🛡️ **Zero Double-Charges:** Distributed idempotency guard using Redis atomic locks (`SET NX EX`) and MongoDB response replay caching.
-- 📦 **Transactional Outbox Pattern:** Guarantees atomicity between MongoDB state changes and BullMQ background queue dispatches with zero dual-write risk.
-- ⚡ **Sub-40ms API Ingestion:** Immediate client acknowledgment; heavyweight processor operations are handed off asynchronously to background workers.
-- 🔒 **Append-Only Double-Entry Ledger:** Balances are never modified in-place. Immutable `CREDIT` and `DEBIT` journal entries preserve a 100% auditable transaction history.
-- 💸 **Asynchronous Refund Engine:** Partial and full refund workflows with remaining-balance validation, upstream processor refunding, automatic ledger debiting, and compensation rollbacks.
-- 🩺 **Autonomous Self-Healing Sweeper:** Runs every 60s, querying upstream processor APIs to automatically recover stuck payments or cleanly expire abandoned sessions.
-- 💳 **Hosted Customer Checkout UI:** Complete portal supporting UPI QR, Cards, NetBanking, and Sandbox Simulation with strict HMAC-SHA256 signature verification.
+The **Event-Driven Payment Gateway & Ledger Engine** solves these problems using distributed systems patterns:
+1. **Sub-50ms API Response Times**: Ingestion endpoints validate requests and write to database outbox tables before offloading heavy processor network calls to background queues.
+2. **Two-Tier Idempotency**: Prevents double charges through Redis-backed distributed locks and request-response replaying.
+3. **Dual-Write Prevention (Transactional Outbox Pattern)**: Persists domain entities and outbox events in the same database write, relayed asynchronously to BullMQ workers.
+4. **Append-Only Double-Entry Ledger**: Balances are calculated dynamically by aggregating immutable credit and debit journal entries, with updates and deletions blocked at the database driver level.
+5. **Self-Healing Reconciliation**: A scheduled background worker checks for orphaned in-flight payments directly with upstream Razorpay APIs and reconciles them automatically.
+6. **Outbound Webhook Dispatcher**: Delivers signed HMAC-SHA256 notifications to merchants with exponential backoff retries.
 
 ---
 
-## 🏛 The 7 Architectural Pillars
+## 🌟 Key Features
 
-| Pillar | Engineering Pattern | Problem It Solves |
-| :--- | :--- | :--- |
-| **1. Distributed Idempotency** | Redis `SET NX EX` + MongoDB 24h Response Replay Cache | Eliminates duplicate payment/refund requests caused by network retries or client double-clicks. |
-| **2. Transactional Outbox** | Multi-Document ACID Transactions (MongoDB Replica Set) | Eliminates dual-write anomalies; database records and message queue events commit atomically or not at all. |
-| **3. Non-Blocking Async Ingestion** | BullMQ + Redis + Document-level Atomic Claims | Unblocks HTTP threads for sub-40ms latency; prevents competing worker instances from duplicate processing. |
-| **4. Double-Entry Financial Ledger** | Append-Only Journal (`CREDIT` / `DEBIT`) & Aggregation | Eliminates drift and balance corruption; balances are calculated dynamically from an immutable audit trail. |
-| **5. Full & Partial Refund Engine** | Asynchronous Refund Pipeline with Ledger Inversion | Safely issues refunds against captured payments, updates remaining balances, and writes balancing `DEBIT` entries. |
-| **6. Self-Healing Reconciliation** | 60-second Periodic Sweeper with Processor Polling | Automatically recovers payments interrupted during browser redirection or missed webhook deliveries. |
-| **7. Cryptographic Security** | Raw-Buffer HMAC-SHA256 Signature Verification | Prevents payload tampering and spoofed webhooks from malicious third parties. |
-
----
-
-## 📊 System Architecture Diagram
-
-```mermaid
-flowchart TD
-    subgraph ClientLayer["1. Client & Merchant Layer"]
-        Merchant["Merchant App / API Client"]
-        Customer["Customer Browser (Hosted Checkout Portal)"]
-        Console["Gateway Console (React 18 + Tailwind)"]
-    end
-
-    subgraph SecurityLayer["2. Ingestion & Security Guard"]
-        AuthMiddleware["API Key Auth (SHA-256 in Redis)"]
-        IdemMiddleware["Distributed Idempotency (Redis SET NX EX + Cache)"]
-        PublicCheckoutAPI["Public Checkout API (/v1/checkout/*)"]
-    end
-
-    subgraph StorageLayer["3. ACID Storage (MongoDB Replica Set)"]
-        Tx["Atomic Multi-Document Transaction"]
-        PaymentsCol[("payments")]
-        OutboxCol[("outbox_events")]
-        RefundsCol[("refunds")]
-        LedgerCol[("ledger_entries")]
-        IdemCol[("idempotency_keys")]
-    end
-
-    subgraph AsyncEngine["4. Async Processing Engine (BullMQ + Redis)"]
-        OutboxRelay["Outbox Relay (Polls every 1500ms)"]
-        PaymentQueue[("BullMQ: payment-queue")]
-        RefundQueue[("BullMQ: refund-queue")]
-        WebhookQueue[("BullMQ: webhook-queue")]
-        PayWorker["Payment Worker (Atomic DB Claim)"]
-        RefundWorker["Refund Worker (Debit Ledger & Razorpay)"]
-        Reconciler["Reconciliation Worker (Runs every 60s)"]
-        HookWorker["Webhook Worker (Exponential Backoff)"]
-    end
-
-    subgraph ProcessorLayer["5. External Payment Processor"]
-        Razorpay["Razorpay API (Orders, Payments, Refunds)"]
-    end
-
-    %% Ingestion Flow
-    Merchant -->|POST /v1/payments (Idempotency-Key)| AuthMiddleware
-    Console -->|Manage Payments, Refunds, Ledger| AuthMiddleware
-    AuthMiddleware --> IdemMiddleware
-    IdemMiddleware -->|1. Atomic Write| Tx
-    Tx --> PaymentsCol
-    Tx --> OutboxCol
-    Tx --> IdemCol
-    Tx -.->|2. Immediate 201 Created < 40ms| Merchant
-
-    %% Async Payment Flow
-    OutboxCol -->|3. Polls pending events| OutboxRelay
-    OutboxRelay -->|4. Push Job| PaymentQueue
-    PaymentQueue -->|5. Claim Job| PayWorker
-    PayWorker -->|6. Create Order| Razorpay
-    PayWorker -->|7. Update status: REQUIRES_ACTION| PaymentsCol
-
-    %% Customer Checkout Flow
-    Customer -->|8. GET /v1/checkout/:id| PublicCheckoutAPI
-    Customer -->|9. Pay via UPI / Card / Simulator| PublicCheckoutAPI
-    PublicCheckoutAPI -->|10. Verify HMAC & Mark SUCCEEDED| PaymentsCol
-    PublicCheckoutAPI -->|11. Record CREDIT entry| LedgerCol
-
-    %% Refund Flow
-    Merchant -->|12. POST /v1/refunds| AuthMiddleware
-    AuthMiddleware -->|13. Record PENDING Refund & Outbox| RefundsCol
-    RefundsCol -->|14. Enqueue Job| RefundQueue
-    RefundQueue -->|15. Process Refund| RefundWorker
-    RefundWorker -->|16. Call Razorpay Refund API| Razorpay
-    RefundWorker -->|17. Record DEBIT entry| LedgerCol
-    RefundWorker -->|18. Update Refund -> SUCCEEDED| RefundsCol
-
-    %% Self Healing & Webhooks
-    Reconciler -->|19. Polls stuck payments > 3m| Razorpay
-    Reconciler -->|20. Auto-reconcile to SUCCEEDED| PaymentsCol
-    PayWorker & RefundWorker & Reconciler -.->|21. Enqueue Webhook| WebhookQueue
-    WebhookQueue --> HookWorker
-    HookWorker -->|22. Signed HMAC HTTP POST| Merchant
-```
+- **Merchant Onboarding**: Dynamic API key generation (`key_<hex>`) and webhook secret generation (`whsec_<hex>`), stored using SHA-256 hashes with Redis caching.
+- **Idempotent Ingestion**: Redis-based `Idempotency-Key` tracking ensures safe retries with zero duplicate payments or refunds.
+- **Transactional Outbox Worker**: Polls pending events (`PAYMENT_CREATED`, `REFUND_CREATED`) and enqueues jobs into BullMQ queues with deduplication keys.
+- **Razorpay Integration**: Creates upstream orders, processes refunds, and verifies cryptographic webhook and checkout signatures.
+- **Double-Entry Financial Ledger**: Strictly append-only collection where each entry is an immutable debit or credit; updates and deletions are blocked by schema hooks.
+- **Asynchronous Refund Engine**: Validates refundable balance, atomically reserves amounts, executes upstream refunds, records ledger debits, and handles automatic rollbacks if terminal failures occur.
+- **Reconciliation Engine**: Identifies payments stalled in `PROCESSING` status for over 3 minutes and synchronizes status with Razorpay.
+- **Merchant Management Dashboard**: Interactive React dashboard for monitoring balance, managing payments, issuing refunds, reviewing immutable ledger audits, and inspecting API logs.
+- **Hosted Customer Checkout**: Public checkout portal allowing end customers to pay via Razorpay checkout or run simulated test payments.
 
 ---
 
-## 📂 Comprehensive File-by-File & Directory Guide
+## 🛠 Tech Stack
 
-This section describes **every single file** in the repository, explaining its purpose, internal code flow, dependencies, and architectural takeaway.
+### Backend
+- **Runtime**: [Node.js](https://nodejs.org/) (ES Modules, `node --watch`)
+- **Web Framework**: [Express 5](https://expressjs.com/) (`v5.3.0`)
+- **Primary Database**: [MongoDB](https://www.mongodb.com/) via [Mongoose](https://mongoosejs.com/) (`v9.11.1`)
+- **In-Memory Store & Cache**: [Redis](https://redis.io/) via [ioredis](https://github.com/redis/ioredis) (`v6.0.0`)
+- **Distributed Queues**: [BullMQ](https://bullmq.io/) (`v6.3.12`)
+- **Payment Processing**: [Razorpay Node SDK](https://razorpay.com/docs/api/) (`v2.9.8`)
+- **Logging & Security**: [Winston](https://github.com/winstonjs/winston), [Morgan](https://github.com/expressjs/morgan), [Helmet](https://helmetjs.github.io/), [CORS](https://github.com/expressjs/cors)
 
-### Backend Core Architecture (File Breakdown)
+### Frontend
+- **Framework & Tooling**: [React 18](https://react.dev/), [Vite 5](https://vitejs.dev/)
+- **Routing**: [React Router DOM 6](https://reactrouter.com/)
+- **Styling**: [Tailwind CSS 3](https://tailwindcss.com/), [PostCSS](https://postcss.org/)
+- **Icons**: [Lucide React](https://lucide.dev/)
+
+---
+
+## 📂 Project Directory Structure
 
 ```text
-backend/
-├── src/
-│   ├── app.js                          # Application bootstrap & background task supervisor
-│   ├── config/                         # Infrastructure connections & clients
-│   │   ├── db.js                       # MongoDB Replica Set connection & event handlers
-│   │   ├── logger.js                   # Winston structured JSON logger
-│   │   ├── razorpay.js                 # Razorpay SDK initialization & key validation
-│   │   └── redis.js                    # ioredis singleton client for locks & BullMQ
-│   ├── middleware/                     # Express HTTP middleware pipeline
-│   │   ├── auth.js                     # API key authentication with SHA-256 & Redis caching
-│   │   ├── idempotency.js              # Distributed idempotency with Redis SET NX & replay cache
-│   │   └── morgan.middleware.js        # HTTP access logging routed to Winston
-│   ├── modules/                        # Domain-driven feature modules
-│   │   ├── checkout/                   # Public customer checkout session & verification
-│   │   │   ├── checkout.controller.js  # Session fetching, HMAC verification, sandbox simulation
-│   │   │   └── checkout.routes.js      # Public /v1/checkout route definitions
-│   │   ├── ledger/                     # Double-entry append-only accounting engine
-│   │   │   ├── ledger.model.js         # Mongoose schema for immutable CREDIT / DEBIT records
-│   │   │   ├── ledger.routes.js        # Authenticated /v1/ledger endpoints
-│   │   │   └── ledger.service.js       # Transactional credit/debit writing & aggregation pipeline
-│   │   ├── merchants/                  # Merchant onboarding & credential management
-│   │   │   ├── merchant.controller.js  # Merchant signup & profile retrieval
-│   │   │   ├── merchant.model.js       # Merchant schema with hashed API keys & webhook URLs
-│   │   │   └── merchant.routes.js      # /v1/merchants endpoints
-│   │   ├── payments/                   # Payment ingestion, schema, and outbox model
-│   │   │   ├── outbox.model.js         # Transactional Outbox schema (pending/processed events)
-│   │   │   ├── payment.controller.js   # Fast payment creation & payment listing
-│   │   │   ├── payment.model.js        # State machine schema with processing locks & audit trails
-│   │   │   └── payment.routes.js       # /v1/payments endpoints with idempotency middleware
-│   │   ├── processors/                 # Upstream payment service integrations
-│   │   │   └── razorpay.processor.js   # Razorpay Orders/Payments API wrappers & signature checks
-│   │   ├── refunds/                    # Phase 9: Full & Partial Refund Engine
-│   │   │   ├── refund.controller.js    # Refund endpoint handlers & query lookups
-│   │   │   ├── refund.model.js         # Refund schema (PENDING, PROCESSING, SUCCEEDED, FAILED)
-│   │   │   ├── refund.routes.js        # /v1/refunds routes with idempotency guard
-│   │   │   └── refund.service.js       # Refund validation, remaining balance checks, outbox write
-│   │   └── webhooks/                   # Inbound and outbound webhook processing
-│   │       ├── razorpay.webhook.js     # Inbound Razorpay webhook signature verification
-│   │       ├── webhook.model.js        # Webhook delivery audit logs & retry state
-│   │       └── webhook.routes.js       # /v1/webhooks endpoints
-│   ├── queues/                         # BullMQ queue instantiations
-│   │   ├── payment.queue.js            # BullMQ "payment-queue" instance
-│   │   ├── refund.queue.js             # BullMQ "refund-queue" instance
-│   │   └── webhook.queue.js            # BullMQ "webhook-queue" instance
-│   └── workers/                        # Distributed background workers
-│       ├── outbox.relay.js             # Polls outbox_events and enqueues to BullMQ
-│       ├── payment.worker.js           # Claims payments atomically & creates Razorpay orders
-│       ├── reconciliation.worker.js    # 60s periodic sweeper that heals stuck payments
-│       ├── refund.worker.js            # Calls Razorpay refund API & writes ledger DEBIT
-│       └── webhook.worker.js           # Dispatches signed webhooks with exponential retries
-```
-
-#### Detailed Breakdown of Backend Files
-
-| File Path | Purpose & Responsibilities | Code Flow & Triggers | Architectural Takeaway |
-| :--- | :--- | :--- | :--- |
-| **`app.js`** | Main server entrypoint. Configures Express 5, security middleware (Helmet, CORS, raw body parsing), mounts routes, connects MongoDB, and initializes background workers. | Runs on `npm run dev`. Configures Google/Cloudflare DNS fallbacks, starts DB connection, launches the Outbox Relay (1.5s interval), and starts the Reconciliation Sweeper (60s interval). | Central supervisor ensuring all asynchronous subsystems boot harmoniously with the HTTP server. |
-| **`config/db.js`** | Manages Mongoose connection to MongoDB Replica Set. | Invoked during startup; binds `error`, `disconnected`, and `reconnected` listeners. Enables multi-document transactions. | Guarantees that replica set requirements for ACID transactions are satisfied before accepting traffic. |
-| **`config/logger.js`** | Winston logging configuration. | Outputs structured JSON in production and readable colorized logs in development. | Standardizes log formatting for centralized observability (Datadog, Loki, CloudWatch). |
-| **`config/razorpay.js`**| Instantiates the official Razorpay SDK client with credentials from `.env`. | Exported as `razorpayClient` for order creation, payment lookup, and refund execution. | Isolates SDK initialization and validates API keys on startup. |
-| **`config/redis.js`** | Singleton `ioredis` client for distributed locks, caching, and BullMQ queues. | Configured with automatic reconnection (`retryStrategy`) and max reconnect retries. | High-performance in-memory foundation for distributed locks and messaging queues. |
-| **`middleware/auth.js`** | Validates `x-api-key` header on incoming requests. | Computes SHA-256 hash of API key; queries Redis cache first; falls back to MongoDB lookup on cache miss; attaches merchant to `req.merchant`. | Prevents plaintext key storage; achieves sub-1ms auth checks via Redis caching. |
-| **`middleware/idempotency.js`** | Distributed idempotency filter. | Checks Redis for active `IN_FLIGHT` lock via `SET NX EX 30`. If locked, returns `409 Conflict`. If previously executed, returns cached MongoDB response. Otherwise, intercepts response and caches payload. | Guarantees exactly-once semantics for payment and refund creation requests. |
-| **`modules/checkout/checkout.controller.js`** | Customer checkout handlers. | `getSession`: returns safe payment metadata without exposing secret keys. `verifySignature`: validates HMAC-SHA256 signature and credits ledger. `simulatePayment`: instant sandbox testing. | Provides a public-facing API for customer browser interaction while maintaining zero-trust cryptographic verification. |
-| **`modules/checkout/checkout.routes.js`** | Route definitions for public checkout (`/v1/checkout`). | Maps public HTTP routes to controller methods. No API key required. | Exposes public access to customer checkout sessions while strictly securing merchant endpoints. |
-| **`modules/ledger/ledger.model.js`** | Mongoose schema for ledger entries. | Defines immutable fields: `merchantId`, `paymentId`, `refundId`, `type` (`CREDIT` / `DEBIT`), `amount`, `currency`, `description`. | Contains no update methods; serves as an append-only write journal. |
-| **`modules/ledger/ledger.service.js`** | Double-entry ledger operations. | `recordCredit()`: appends credit for successful payments. `recordDebit()`: appends debit for refunds. `getMerchantBalance()`: executes aggregation pipeline (`$group` sum of credits vs debits). | Core accounting engine ensuring balances are calculated dynamically with zero drift. |
-| **`modules/merchants/merchant.model.js`** | Merchant account schema. | Stores `name`, `email`, hashed `apiKey` (SHA-256), `webhookUrl`, and `webhookSecret`. | Employs one-way cryptographic hashing for API keys; plaintext keys are never persisted. |
-| **`modules/payments/outbox.model.js`** | Schema for Transactional Outbox events. | Stores `aggregateType`, `aggregateId`, `eventType`, `payload`, and `status` (`PENDING`, `PROCESSED`, `FAILED`). | Bridging mechanism guaranteeing database writes and queue jobs stay 100% consistent. |
-| **`modules/payments/payment.model.js`** | Master payment schema & state machine. | Enforces valid status transitions (`CREATED`, `PROCESSING`, `REQUIRES_ACTION`, `SUCCEEDED`, `FAILED`, `CANCELLED`). Stores `processingLock` and refund tallies. | Document-level atomicity prevents competing workers from duplicate execution. |
-| **`modules/payments/payment.service.js`** | Transactional payment ingestion. | Opens MongoDB ACID transaction; writes `Payment`, `OutboxEvent`, and `IdempotencyKey` atomically; commits and returns in < 40ms. | Eliminates dual-write anomalies through multi-document atomic commits. |
-| **`modules/processors/razorpay.processor.js`** | Upstream Razorpay client wrapper. | Abstracts `orders.create()`, `payments.fetch()`, and cryptographic signature verification. | Decouples business logic from specific payment gateway SDK interfaces. |
-| **`modules/refunds/refund.model.js`** | Schema for merchant refunds. | Tracks `merchantId`, `paymentId`, `processorPaymentId`, `processorRefundId`, `amount`, `status` (`PENDING`, `PROCESSING`, `SUCCEEDED`, `FAILED`), and `reason`. | Provides full auditability for every refund attempt with processor tracking IDs. |
-| **`modules/refunds/refund.service.js`** | Core refund business logic. | Validates refundable balance (`amount <= payment.amount - refundedAmount`); creates pending `Refund`; updates payment `refundedAmount`; pushes to `refund-queue`. | Guarantees that refunds never exceed collected amounts and enforces state consistency. |
-| **`modules/refunds/refund.controller.js`** | HTTP request handlers for refunds. | Handles refund creation, pagination, query filtering, and direct ID lookups. | Standardizes JSON responses and error serialization for the refund engine. |
-| **`modules/refunds/refund.routes.js`** | Route definitions for `/v1/refunds`. | Protects refund endpoints with `authenticateApiKey` and `idempotency()` middleware. | Ensures refunds cannot be triggered without valid credentials and prevents double-refunds. |
-| **`modules/webhooks/razorpay.webhook.js`** | Inbound webhook verification. | Verifies raw body signature against `RAZORPAY_WEBHOOK_SECRET`; dispatches internal state transitions. | Prevents webhook spoofing by validating HMAC signatures on raw, unparsed request buffers. |
-| **`queues/payment.queue.js`** | BullMQ Payment Queue declaration. | Exports `paymentQueue` instance configured with Redis connection and default retry strategies. | Provides persistent message queuing for asynchronous order creation. |
-| **`queues/refund.queue.js`** | BullMQ Refund Queue declaration. | Exports `refundQueue` instance configured for asynchronous refund job execution. | Decouples refund API requests from upstream processor latency. |
-| **`queues/webhook.queue.js`** | BullMQ Webhook Queue declaration. | Exports `webhookQueue` instance for reliable outbound merchant webhook deliveries. | Manages scheduled retries and exponential backoff for merchant webhook endpoints. |
-| **`workers/outbox.relay.js`** | Background polling process for outbox events. | Runs every 1500ms; queries `outbox_events` with status `PENDING`; pushes jobs to `payment-queue`; updates status to `PROCESSED`. | Guarantees at-least-once job delivery from database outbox to BullMQ without two-phase commit. |
-| **`workers/payment.worker.js`** | BullMQ consumer for payment processing. | Atomically claims payment (`findOneAndUpdate` with `PROCESSING`); calls Razorpay to create order; updates payment to `REQUIRES_ACTION`. | Prevents worker race conditions and moves heavy network calls outside the client request path. |
-| **`workers/reconciliation.worker.js`**| Autonomous self-healing sweeper. | Runs every 60s; finds payments in `PROCESSING` older than 3 minutes; checks status on Razorpay API; settles captured payments to `SUCCEEDED`. | Catches dropped network calls, closed browser tabs, or missed webhooks with zero manual intervention. |
-| **`workers/refund.worker.js`** | BullMQ consumer for refund execution. | Atomically sets refund status to `PROCESSING`; calls Razorpay refund API; appends `DEBIT` entry to ledger; emits `refund.succeeded` webhook. | Executes financial reversals safely with automatic rollback if processor rejects the refund. |
-| **`workers/webhook.worker.js`** | Outbound merchant webhook dispatcher. | Pulls jobs from `webhook-queue`; computes HMAC signature; makes HTTP POST request; handles exponential retries on failure. | Guarantees reliable delivery of event notifications to merchant callback URLs. |
-
----
-
-### Frontend Architecture (File Breakdown)
-
-```text
-frontend/
-├── src/
-│   ├── main.jsx                        # React root entrypoint & provider mounting
-│   ├── App.jsx                         # Application router & route layout hierarchy
-│   ├── index.css                       # Tailwind CSS directives & custom animations
-│   ├── components/
-│   │   ├── layout/
-│   │   │   ├── AppShell.jsx            # Authenticated layout with Sidebar, Topbar, and Outlet
-│   │   │   ├── ProtectedRoute.jsx      # Route guard requiring valid merchant API key
-│   │   │   ├── SearchModal.jsx         # Global CMD+K search modal across payments & refunds
-│   │   │   ├── Sidebar.jsx             # Navigation sidebar with status badges
-│   │   │   └── Topbar.jsx              # Header with live environment badge, search & profile
-│   │   ├── refunds/
-│   │   │   └── RefundModal.jsx         # Interactive dialog to issue partial or full refunds
-│   │   └── ui/                         # Design system primitive components
-│   │       ├── Badge.jsx               # Status indicators (SUCCEEDED, PENDING, FAILED)
-│   │       ├── Button.jsx              # Button component with loading spinner states
-│   │       ├── Card.jsx                # Modern surface card container
-│   │       ├── CopyButton.jsx          # One-click clipboard copy utility
-│   │       ├── EmptyState.jsx          # Visual placeholder for empty lists
-│   │       ├── InfoRow.jsx             # Label-value pair with copy support
-│   │       ├── Input.jsx               # Form text input with validation styling
-│   │       ├── PageHeader.jsx          # Standardized page title, description & actions
-│   │       ├── Select.jsx              # Dropdown selector
-│   │       ├── Skeleton.jsx            # Shimmer loading skeleton
-│   │       ├── Spinner.jsx             # Animated loading spinner
-│   │       └── StatCard.jsx            # High-impact metric card with trends & icons
-│   ├── context/
-│   │   ├── AuthContext.jsx             # Manages merchant API key, profile & connection state
-│   │   └── ToastContext.jsx            # Global notification toast provider
-│   ├── hooks/
-│   │   ├── useFetch.js                 # Polling-capable data fetching hook
-│   │   └── useHealth.js                # Background health poller (/health)
-│   ├── lib/
-│   │   ├── api.js                      # Dependency-free typed HTTP API client
-│   │   ├── constants.js                # App constants, navigation links & status maps
-│   │   ├── format.js                   # Currency formatters, date helpers & status colors
-│   │   └── paymentStore.js             # Local storage persistence for simulated payments
-│   └── pages/
-│       ├── ApiReferencePage.jsx        # Interactive in-console documentation & cURL generator
-│       ├── CheckoutPage.jsx            # Hosted customer checkout portal (UPI, Card, Simulator)
-│       ├── ConnectPage.jsx             # Merchant API key entry & onboarding screen
-│       ├── DashboardPage.jsx           # Gateway overview metrics, live balance & recent activity
-│       ├── LedgerPage.jsx              # Double-entry ledger audit journal & balance breakdown
-│       ├── NotFoundPage.jsx            # 404 handler
-│       ├── PaymentDetailPage.jsx       # Deep inspection of transaction, outbox, and refunds
-│       ├── PaymentsPage.jsx            # Payments list, filters & creation modal
-│       ├── RefundsPage.jsx             # Refunds list, direct lookup & real-time live polling
-│       ├── SettingsPage.jsx            # Merchant credentials & webhook endpoint settings
-│       └── WebhooksPage.jsx            # Webhook delivery logs & payload inspector
-```
-
-#### Detailed Breakdown of Frontend Files
-
-| File Path | Purpose & Responsibilities | Code Flow & UI Interaction | Architectural Takeaway |
-| :--- | :--- | :--- | :--- |
-| **`main.jsx`** | Bootstraps React 18 application with `BrowserRouter`, `AuthProvider`, and `ToastProvider`. | Mounts root DOM element into `index.html`. | Provides unified context providers to all downstream routes. |
-| **`App.jsx`** | Central routing declaration using React Router v6. | Defines public routes (`/connect`, `/checkout/:id`) and authenticated dashboard routes guarded by `ProtectedRoute`. | Clean separation between public customer-facing checkout and merchant console. |
-| **`context/AuthContext.jsx`** | Manages merchant authentication state in `localStorage`. | Validates `x-api-key` against `/v1/merchants/me`; supplies `apiKey`, `merchant`, and `logout()` to components. | Centralized credential management avoiding prop drilling across pages. |
-| **`lib/api.js`** | Thin, dependency-free HTTP client wrapper around `fetch`. | Handles JSON parsing, attaches `x-api-key` and `Idempotency-Key`, and standardizes `ApiError` exceptions. | Single source of truth for all network communication with backend. |
-| **`pages/DashboardPage.jsx`** | Executive console overview. | Fetches live merchant balance, transaction volumes, recent payments, and system health status. | Provides immediate visibility into financial and operational metrics. |
-| **`pages/PaymentsPage.jsx`** | Merchant payment management interface. | Displays paginated payments; allows creating test payments; includes **live auto-polling** for in-flight transactions. | Real-time transaction monitoring with automatic status updates without manual refreshes. |
-| **`pages/PaymentDetailPage.jsx`** | Deep inspection of an individual payment. | Shows transaction metadata, customer details, raw outbox event logs, attached refunds, and live polling indicator. | Full forensic visibility into the exact lifecycle and state changes of a transaction. |
-| **`pages/RefundsPage.jsx`** | Comprehensive refund management interface. | Lists all refunds, supports direct lookup by Refund ID or Payment ID, and features **live auto-polling** for pending refunds. | Enables merchants to track reversals and inspect upstream processor refund IDs. |
-| **`components/refunds/RefundModal.jsx`** | Interactive modal dialog to trigger refunds. | Validates refundable balance; supports full or partial refunds; generates unique `Idempotency-Key`. | Client-side guard preventing over-refunds before dispatching to the API. |
-| **`pages/CheckoutPage.jsx`** | Hosted customer checkout portal. | Public customer page displaying order summary, UPI QR code, credit/debit card form, and Developer Sandbox simulator. | Seamless customer payment experience supporting both real Razorpay checkout and instant simulation. |
-| **`pages/LedgerPage.jsx`** | Accounting audit journal. | Displays aggregated ledger balance (`totalCredits - totalDebits`) and immutable double-entry journal records. | Verifiable financial records ensuring zero discrepancies between gateway and bank accounts. |
-| **`pages/WebhooksPage.jsx`** | Merchant webhook monitoring portal. | Inspects delivered webhook events, HTTP response codes, and signed payload previews. | Empowers merchants to debug and verify integration with their external backend servers. |
-
----
-
-## 🔄 End-to-End Execution Flows
-
-### Flow 1: Sub-40ms Idempotent Payment Ingestion
-
-```text
-[Client / Merchant] ──(1) POST /v1/payments (Idempotency-Key: KEY_123)──> [API Gateway]
-                                                                                │
-                                                            (2) Redis: SET idem:KEY_123 IN_FLIGHT NX EX 30
-                                                                                ├── Key already exists? ──> Return 409 Conflict
-                                                                                │
-                                                            (3) Start MongoDB ACID Multi-Document Session
-                                                            ┌───────────────────────────────────────────────┐
-                                                            │ • Insert Payment (status: CREATED)            │
-                                                            │ • Insert OutboxEvent (status: PENDING)        │
-                                                            │ • Insert IdempotencyKey (cache response)      │
-                                                            └───────────────────────────────────────────────┘
-                                                                                │
-                                                            (4) Commit Transaction & End Session
-                                                                                │
-[Client / Merchant] <──(5) HTTP 201 Created (< 40ms response)───────────────────┘
-```
-
-1. Merchant sends `POST /v1/payments` with an `x-api-key` and an `Idempotency-Key` header.
-2. The `idempotency` middleware attempts an atomic Redis `SET NX EX 30`. If another request with the same key is active, it immediately rejects with `409 Conflict`.
-3. If previously resolved, the cached response payload is immediately replayed from MongoDB.
-4. If new, a MongoDB transaction atomically writes the `Payment` record, `OutboxEvent` record, and idempotency cache document in a single commit.
-5. The API returns `201 CREATED` in under 40 milliseconds without waiting for external payment processor calls.
-
----
-
-### Flow 2: Outbox Relay & BullMQ Worker Processing
-
-```text
-[Outbox Relay Worker] ──(1) Polls MongoDB: outbox_events WHERE status = 'PENDING'
-        │
-        ├──(2) Pushes Job to BullMQ 'payment-queue' (JobId: outbox_<id>)
-        │
-        └──(3) Updates outbox_events status = 'PROCESSED'
-                     │
-                     ▼
-[Payment Worker] ──(4) Pulls Job from BullMQ 'payment-queue'
-        │
-        ├──(5) MongoDB Atomic Claim: findOneAndUpdate({ _id, status: 'CREATED' }, { status: 'PROCESSING' })
-        │       └── If payment not in CREATED state: Worker exits cleanly (Prevents duplicate processing)
-        │
-        ├──(6) Calls Razorpay Orders API: razorpay.orders.create({ amount, currency, receipt })
-        │
-        └──(7) Updates Payment in DB:
-                status = 'REQUIRES_ACTION'
-                razorpayOrderId = order.id
+Event-Driven Payment Gateway & Ledger Engine/
+├── ARCHITECTURE.md                  # Comprehensive architectural specification
+├── README.md                        # Project documentation and setup guide
+├── backend/
+│   ├── .env.example                 # Backend environment variable template
+│   ├── docker-compose.yml           # Docker compose template (currently empty)
+│   ├── package.json                 # Backend scripts and dependencies
+│   └── src/
+│       ├── app.js                   # Application entrypoint & HTTP server
+│       ├── config/
+│       │   ├── db.js                # MongoDB connection handler
+│       │   ├── logger.js            # Winston structured logger
+│       │   ├── razorpay.js          # Razorpay SDK client initialization
+│       │   └── redis.js             # ioredis client configuration
+│       ├── middleware/
+│       │   ├── auth.js              # x-api-key authentication with Redis caching
+│       │   ├── idempotency.js       # Atomic locking & response replay middleware
+│       │   └── morgan.middleware.js # Express HTTP access logger
+│       ├── modules/
+│       │   ├── checkout/            # Public customer checkout session & verification
+│       │   │   ├── checkout.controller.js
+│       │   │   └── checkout.routes.js
+│       │   ├── ledger/              # Double-entry ledger & balance aggregation
+│       │   │   ├── ledger.model.js
+│       │   │   ├── ledger.routes.js
+│       │   │   └── ledger.service.js
+│       │   ├── merchants/           # Merchant registration & profile lookup
+│       │   │   ├── merchant.controller.js
+│       │   │   ├── merchant.model.js
+│       │   │   └── merchant.routes.js
+│       │   ├── payments/            # Payment ingestion, queries & verification
+│       │   │   ├── outbox.model.js
+│       │   │   ├── payment.controller.js
+│       │   │   ├── payment.model.js
+│       │   │   └── payment.routes.js
+│       │   ├── processors/          # Upstream Razorpay processor integration
+│       │   │   └── razorpay.processor.js
+│       │   ├── refunds/             # Refund state management & routes
+│       │   │   ├── refund.controller.js
+│       │   │   ├── refund.model.js
+│       │   │   ├── refund.routes.js
+│       │   │   └── refund.service.js
+│       │   └── webhooks/            # Inbound Razorpay webhook handling
+│       │       ├── razorpay.webhook.js
+│       │       ├── webhook.model.js
+│       │       └── webhook.routes.js
+│       ├── queues/                  # BullMQ queue declarations
+│       │   ├── payment.queue.js
+│       │   ├── refund.queue.js
+│       │   └── webhook.queue.js
+│       └── workers/                 # Background workers & scheduled relays
+│           ├── outbox.relay.js      # Polling outbox table -> queues
+│           ├── payment.worker.js    # Consumes payments & creates Razorpay orders
+│           ├── reconciliation.worker.js # Sweeps stuck payments
+│           ├── refund.worker.js     # Consumes refunds & calls Razorpay API
+│           └── webhook.worker.js    # Dispatches signed webhooks to merchants
+└── frontend/
+    ├── .env.example                 # Frontend environment variable template
+    ├── package.json                 # Frontend dependencies & scripts
+    ├── index.html                   # Single Page App root HTML
+    ├── tailwind.config.js           # Design system configuration
+    ├── vite.config.js               # Vite bundler configuration
+    └── src/
+        ├── App.jsx                  # Main application routes & shell
+        ├── main.jsx                 # React root bootstrap
+        ├── context/                 # AuthContext (API key) & ToastContext
+        ├── lib/
+        │   ├── api.js               # Typed HTTP client for all backend endpoints
+        │   └── format.js            # Minor unit (paise) converters & formatters
+        └── pages/                   # Console screens (Dashboard, Payments, Ledger, etc.)
 ```
 
 ---
 
-### Flow 3: Customer Checkout & Cryptographic HMAC Verification
+## ⚙️ Prerequisites & Environment Variables
 
-```text
-[Customer Browser] ──(1) Opens Checkout Link: /checkout/:id
-        │
-        ├──(2) GET /v1/checkout/:id ──> Returns order amount, currency, and merchant name
-        │
-        ├──(3) Customer completes payment (UPI, Card, or Simulator)
-        │
-        └──(4) POST /v1/checkout/verify
-                Payload: { razorpayOrderId, razorpayPaymentId, razorpaySignature }
-                     │
-                     ▼
-[Gateway API] ──(5) Cryptographic HMAC-SHA256 Verification:
-                    expected = HMAC_SHA256(orderId + "|" + paymentId, RAZORPAY_KEY_SECRET)
-                    assert(expected === razorpaySignature)
-                     │
-                     ├──(6) Update Payment: status = 'SUCCEEDED', razorpayPaymentId
-                     ├──(7) Append Ledger Entry: type = 'CREDIT', amount = payment.amount
-                     └──(8) Dispatch Merchant Webhook: event = 'payment.succeeded'
-```
+### Prerequisites
+- **Node.js**: v18.x or v20.x+
+- **MongoDB**: v6.x or v7.x (A replica set is **required** because Mongoose sessions and transactions require replication enabled)
+- **Redis**: v6.x or v7.x+
+- **Razorpay Account**: API Key ID and Secret from your Razorpay Dashboard (Test mode works out of the box)
 
----
+### Backend Environment Variables
+Create a file at `backend/.env` based on `backend/.env.example`:
 
-### Flow 4: Append-Only Immutable Double-Entry Ledger
-
-```text
-❌ INCORRECT (In-Place Mutation):
-Account Balance: ₹1,000 ──(+ ₹500)──> ₹1,500 ──(- ₹200)──> ₹1,300
-(Zero audit trail. If balance corrupts to ₹1,100, forensic reconstruction is impossible.)
-
-✅ CORRECT (Append-Only Immutable Ledger):
-┌────────────┬─────────┬──────────────┬──────────┬───────────┬──────────────────────┐
-│ Entry ID   │ Type    │ Reference ID │ Amount   │ Currency  │ Timestamp            │
-├────────────┼─────────┼──────────────┼──────────┼───────────┼──────────────────────┤
-│ ledger_001 │ CREDIT  │ pay_882910   │ ₹500.00  │ INR       │ 2026-10-18 10:00:00  │
-│ ledger_002 │ CREDIT  │ pay_882911   │ ₹500.00  │ INR       │ 2026-10-18 10:05:00  │
-│ ledger_003 │ DEBIT   │ ref_441029   │ ₹200.00  │ INR       │ 2026-10-18 10:15:00  │
-└────────────┴─────────┴──────────────┴──────────┴───────────┴──────────────────────┘
-
-Merchant Available Balance = Σ(CREDIT) - Σ(DEBIT) = ₹1,000 - ₹200 = ₹800.00
-Every single transaction is mathematically provable and permanently auditable.
-```
-
----
-
-### Flow 5: Asynchronous Refund Engine & Ledger Reversal
-
-```text
-[Merchant Console] ──(1) POST /v1/refunds (paymentId, amount, reason)
-        │
-        ├──(2) Validates Payment status is 'SUCCEEDED'
-        ├──(3) Validates amount <= (payment.amount - payment.refundedAmount)
-        ├──(4) Inserts Refund document (status: 'PENDING')
-        ├──(5) Updates Payment: increments refundedAmount, updates refundStatus ('PARTIAL' | 'FULL')
-        ├──(6) Writes OutboxEvent (eventType: 'REFUND_CREATED')
-        └──(7) Enqueues Job in BullMQ 'refund-queue'
-                     │
-                     ▼
-[Refund Worker] ──(8) Atomically claims refund (status: 'PROCESSING')
-        │
-        ├──(9) Calls Razorpay Refund API: razorpay.payments.refund(processorPaymentId, { amount })
-        │
-        ├──(10) On Success:
-        │        • Update Refund status = 'SUCCEEDED' and record processorRefundId
-        │        • Write Ledger Entry: type = 'DEBIT', amount = refund.amount
-        │        • Dispatch Webhook: event = 'refund.succeeded'
-        │
-        └──(11) On Terminal Failure (after max retries):
-                 • Update Refund status = 'FAILED'
-                 • Rollback payment.refundedAmount by decrementing refund.amount
-                 • Restore payment.refundStatus
-                 • Dispatch Webhook: event = 'refund.failed'
-```
-
----
-
-### Flow 6: Self-Healing Reconciliation Sweeper
-
-```mermaid
-flowchart TD
-    Tick["Reconciliation Sweeper Tick (Runs every 60s)"] --> Scan["Find Payments where status == 'PROCESSING'<br/>and updatedAt < (now - 3 minutes)"]
-    Scan --> HasStuck{"Stuck payments found?"}
-    HasStuck -->|No| Idle["Sleep until next tick"]
-    HasStuck -->|Yes| QueryRZP["Query Razorpay API: fetchOrderPayments(razorpayOrderId)"]
-
-    QueryRZP --> CheckAuth{"Captured payment found?"}
-    CheckAuth -->|Yes| Settle["1. Transition status -> SUCCEEDED<br/>2. Record CREDIT in Ledger<br/>3. Dispatch payment.succeeded webhook"]
-    CheckAuth -->|No| CheckAge{"Payment older than 10 minutes?"}
-    CheckAge -->|Yes| Expire["1. Transition status -> FAILED (Session Expired)<br/>2. Dispatch payment.failed webhook"]
-    CheckAge -->|No| Wait["Keep in PROCESSING (allow customer grace period)"]
-```
-
----
-
-### Flow 7: Outbound Webhook Delivery with Exponential Retries
-
-```text
-[Gateway Engine] ──(1) Generates Event: payload + eventType (e.g. payment.succeeded)
-        │
-        ├──(2) Computes HMAC Signature:
-        │       signature = HMAC_SHA256(JSON.stringify(payload), merchant.webhookSecret)
-        │
-        ├──(3) Pushes to BullMQ 'webhook-queue' with exponential backoff configuration:
-        │       attempts: 5, backoff: { type: 'exponential', delay: 10000 }
-        │
-        ▼
-[Webhook Worker] ──(4) HTTP POST to merchant.webhookUrl
-        │               Headers: { 'X-Gateway-Signature': signature }
-        │
-        ├── 2xx Success: Job completed; delivery logged in MongoDB
-        └── 5xx / Network Error: BullMQ schedules retry (10s, 20s, 40s, 80s, 160s)
-```
-
----
-
-## 📡 API Reference & cURL Cheatsheet
-
-### 1. Merchant Onboarding
-```bash
-# Register a new merchant
-curl -X POST http://localhost:3000/v1/merchants \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Acme Store",
-    "email": "dev@acmestore.io",
-    "webhookUrl": "https://webhook.site/test"
-  }'
-```
-*Response returns the plaintext `apiKey` and `webhookSecret` (displayed once).*
-
-```bash
-# Get merchant profile
-curl -X GET http://localhost:3000/v1/merchants/me \
-  -H "x-api-key: your_api_key_here"
-```
-
----
-
-### 2. Payment Ingestion & Management
-```bash
-# Create payment (Sub-40ms atomic transaction)
-curl -X POST http://localhost:3000/v1/payments \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: your_api_key_here" \
-  -H "Idempotency-Key: ORD_TEST_9901" \
-  -d '{
-    "amount": 250000,
-    "currency": "INR",
-    "customerEmail": "sarah@example.com",
-    "customerPhone": "+919876543210"
-  }'
-```
-*Note: Amount is specified in smallest currency unit (e.g., ₹2,500.00 = 250000 paisa).*
-
-```bash
-# List merchant payments
-curl -X GET "http://localhost:3000/v1/payments?page=1&limit=20" \
-  -H "x-api-key: your_api_key_here"
-
-# Get payment by ID
-curl -X GET http://localhost:3000/v1/payments/67128f9d0c24b \
-  -H "x-api-key: your_api_key_here"
-```
-
----
-
-### 3. Customer Hosted Checkout (Public)
-```bash
-# Fetch checkout session for customer UI
-curl -X GET http://localhost:3000/v1/checkout/67128f9d0c24b
-
-# Verify Razorpay checkout signature
-curl -X POST http://localhost:3000/v1/checkout/verify \
-  -H "Content-Type: application/json" \
-  -d '{
-    "paymentId": "67128f9d0c24b",
-    "razorpayOrderId": "order_OZ019283",
-    "razorpayPaymentId": "pay_OZ091238",
-    "razorpaySignature": "3f4a...signature"
-  }'
-
-# Sandbox simulation (Instant test settlement)
-curl -X POST http://localhost:3000/v1/checkout/simulate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "paymentId": "67128f9d0c24b",
-    "status": "SUCCEEDED"
-  }'
-```
-
----
-
-### 4. Refund Engine (Phase 9)
-```bash
-# Create full or partial refund
-curl -X POST http://localhost:3000/v1/refunds \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: your_api_key_here" \
-  -H "Idempotency-Key: REF_TEST_001" \
-  -d '{
-    "paymentId": "67128f9d0c24b",
-    "amount": 100000,
-    "reason": "customer_requested"
-  }'
-
-# List merchant refunds
-curl -X GET "http://localhost:3000/v1/refunds?page=1&limit=20" \
-  -H "x-api-key: your_api_key_here"
-
-# Get refund by ID
-curl -X GET http://localhost:3000/v1/refunds/671291b2c458d \
-  -H "x-api-key: your_api_key_here"
-
-# Get all refunds for a specific payment
-curl -X GET http://localhost:3000/v1/refunds/payment/67128f9d0c24b \
-  -H "x-api-key: your_api_key_here"
-```
-
----
-
-### 5. Double-Entry Ledger & Health
-```bash
-# Get merchant available balance
-curl -X GET http://localhost:3000/v1/ledger/balance \
-  -H "x-api-key: your_api_key_here"
-
-# Inspect immutable ledger entries
-curl -X GET "http://localhost:3000/v1/ledger/entries?page=1&limit=20" \
-  -H "x-api-key: your_api_key_here"
-
-# Health probe
-curl -X GET http://localhost:3000/health
-```
-
----
-
-## 🚀 Local Setup & Getting Started
-
-### 1. Prerequisites
-- **Node.js:** v18+ (Node 20+ recommended)
-- **Redis:** Running locally on port `6379`
-- **MongoDB:** Running as a **Replica Set** on port `27017` *(Required for multi-document ACID transactions)*
-- **Razorpay Account:** Test API keys from the [Razorpay Dashboard](https://dashboard.razorpay.com/#/access/api-keys)
-
-#### MongoDB Replica Set Initiation (If running standalone)
-If your local MongoDB is not yet running as a replica set, start mongod with `--replSet rs0` and run in `mongosh`:
-```javascript
-rs.initiate({
-  _id: "rs0",
-  members: [{ _id: 0, host: "127.0.0.1:27017" }]
-})
-```
-
----
-
-### 2. Configure Backend Environment
-```bash
-cd backend
-cp .env.example .env
-```
-
-Ensure your `.env` contains:
-```ini
+```env
 PORT=3000
 NODE_ENV=development
+
+# MongoDB Connection String
+# (directConnection=true is required for local standalone replica sets)
 MONGODB_URI=mongodb://127.0.0.1:27017/payment_gateway?directConnection=true
+
+# Redis Connection
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
+
+# Razorpay API Credentials
 RAZORPAY_KEY_ID=rzp_test_your_key_id
 RAZORPAY_KEY_SECRET=your_key_secret
-RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
+RAZORPAY_WEBHOOK_SECRET=your_razorpay_webhook_secret
 ```
 
-Install dependencies and start the backend:
+### Frontend Environment Variables
+Create a file at `frontend/.env` based on `frontend/.env.example`:
+
+```env
+# Backend server URL (no trailing slash, no /v1)
+VITE_API_BASE_URL=http://localhost:3000
+```
+
+---
+
+## 🚀 Step-by-Step Setup & Running
+
+### 1. Infrastructure (MongoDB & Redis)
+
+#### Option A: Local Native Services
+- Ensure **Redis** is listening on `127.0.0.1:6379`.
+- Ensure **MongoDB** is running as a single-node replica set. If starting mongod locally:
+  ```bash
+  mongod --replSet rs0 --dbpath /data/db
+  ```
+  Then run `rs.initiate()` once in the `mongosh` shell.
+
+#### Option B: Docker Containers
 ```bash
+# Start Redis container
+docker run -d --name redis-gateway -p 6379:6379 redis:7-alpine
+
+# Start MongoDB replica set container
+docker run -d --name mongo-gateway -p 27017:27017 mongo:7.0 --replSet rs0
+# Initialize the replica set inside the container:
+docker exec -it mongo-gateway mongosh --eval "rs.initiate()"
+```
+
+---
+
+### 2. Backend Setup
+
+```bash
+# 1. Navigate to backend directory
 cd backend
+
+# 2. Install dependencies
 npm install
+
+# 3. Create .env file
+cp .env.example .env
+# Edit .env with your real or test Razorpay credentials
+
+# 4. Start in development mode (with native hot-reload)
 npm run dev
+
+# 5. Or start in standard production mode
+npm start
 ```
-*The API boots at `http://localhost:3000`.*
+
+When started, the backend:
+- Connects to MongoDB via [connectDB](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/config/db.js).
+- Connects to Redis via [redisClient](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/config/redis.js).
+- Starts the outbox polling relay every 1500ms via [startOutboxRelay](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/outbox.relay.js).
+- Starts the reconciliation worker every 60s via [startReconciliationWorker](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/reconciliation.worker.js).
+- Starts listening on `http://localhost:3000`.
 
 ---
 
-### 3. Configure Frontend Console
+### 3. Frontend Setup
+
 ```bash
+# 1. Open a new terminal and navigate to frontend directory
 cd frontend
+
+# 2. Install dependencies
 npm install
-cp .env.example .env     # VITE_API_BASE_URL defaults to http://localhost:3000
+
+# 3. Create .env file
+cp .env.example .env
+
+# 4. Start Vite development server
 npm run dev
 ```
-*The console boots at `http://localhost:5173`.*
+
+Open `http://localhost:5173` in your browser.
+1. Head to `/connect` to generate a new merchant API key or paste an existing key.
+2. The key will be stored in your browser's `localStorage` and sent automatically with every protected request.
 
 ---
 
-## 📖 Architectural Deep Dive
+## 📡 API Reference
 
-For in-depth analysis of distributed failure recovery, state machines, concurrency controls, and ledger aggregation mathematics, refer to:
-👉 **[ARCHITECTURE.md](./ARCHITECTURE.md)**
+> **Note on Money Representation**: All amounts are represented as positive **integers in minor units** (e.g., `10000` = ₹100.00). The minimum payment amount accepted is `100` (₹1.00).
+
+### Authentication
+Protected routes require the `x-api-key` header containing the merchant's private API key:
+```http
+x-api-key: key_7b4c6e910283...
+```
+Requests without a valid key return `401 Unauthorized`.
+
+### Idempotency
+All mutating payment and refund creation requests (`POST /v1/payments`, `POST /v1/refunds`) require an idempotency key header:
+```http
+Idempotency-Key: req_abc123xyz
+# or
+x-idempotency-key: req_abc123xyz
+```
+Duplicate requests return the previously cached response with the HTTP header:
+```http
+x-idempotent-replay: true
+```
+
+---
+
+### Health Check
+
+#### `GET /health`
+Verifies API server liveness and Redis connectivity.
+- **Access**: Public
+- **Response `200 OK`**:
+  ```json
+  {
+    "status": "OK",
+    "timeStamp": "2026-10-18T08:00:00.000Z",
+    "service": {
+      "api": "UP",
+      "redis": "OK"
+    }
+  }
+  ```
+
+---
+
+### Merchant Endpoints
+
+#### `POST /v1/merchants`
+Registers a new merchant. Returns the raw API key and webhook secret **only once**.
+- **Access**: Public
+- **Request Body**:
+  ```json
+  {
+    "name": "Acme Retailers",
+    "email": "finance@acme.com",
+    "webhookUrl": "https://acme.com/webhooks/gateway"
+  }
+  ```
+- **Response `201 Created`**:
+  ```json
+  {
+    "message": "Merchant registered successfully. Save your API key now; it will not be shown again.",
+    "merchantId": "651a2b3c4d5e6f7a8b9c0d1e",
+    "name": "Acme Retailers",
+    "email": "finance@acme.com",
+    "apiKey": "key_0192837465abc123def456...",
+    "webhookSecret": "whsec_789xyz456rst123..."
+  }
+  ```
+
+#### `GET /v1/merchants/me`
+Retrieves the authenticated merchant's profile.
+- **Access**: Protected (`x-api-key`)
+- **Response `200 OK`**:
+  ```json
+  {
+    "merchantId": "651a2b3c4d5e6f7a8b9c0d1e",
+    "name": "Acme Retailers",
+    "email": "finance@acme.com",
+    "webhookUrl": "https://acme.com/webhooks/gateway",
+    "status": "ACTIVE"
+  }
+  ```
+
+---
+
+### Payment Endpoints
+
+#### `POST /v1/payments`
+Creates a payment record in `CREATED` status and writes an outbox event.
+- **Access**: Protected (`x-api-key` + `Idempotency-Key`)
+- **Request Body**:
+  ```json
+  {
+    "amount": 25000,
+    "currency": "INR",
+    "customerEmail": "customer@example.com",
+    "customerPhone": "9876543210"
+  }
+  ```
+- **Response `201 Created`**:
+  ```json
+  {
+    "paymentId": "651a2c3d4e5f6a7b8c9d0e1f",
+    "merchantId": "651a2b3c4d5e6f7a8b9c0d1e",
+    "amount": 25000,
+    "currency": "INR",
+    "status": "CREATED",
+    "createdAt": "2026-10-18T08:05:00.000Z"
+  }
+  ```
+
+#### `GET /v1/payments`
+Lists payments belonging to the authenticated merchant with pagination and filtering.
+- **Access**: Protected (`x-api-key`)
+- **Query Parameters**:
+  - `status` (optional): `CREATED`, `PROCESSING`, `SUCCEEDED`, `FAILED`, `CANCELLED`
+  - `search` (optional): Filters by `customerEmail` (regex match)
+  - `page` (optional, default `1`): Page number
+  - `limit` (optional, default `20`, max `50`): Results per page
+- **Response `200 OK`**:
+  ```json
+  {
+    "data": [
+      {
+        "_id": "651a2c3d4e5f6a7b8c9d0e1f",
+        "merchantId": "651a2b3c4d5e6f7a8b9c0d1e",
+        "amount": 25000,
+        "currency": "INR",
+        "status": "SUCCEEDED",
+        "customerEmail": "customer@example.com",
+        "razorpayOrderId": "order_NXyZ123456",
+        "razorpayPaymentId": "pay_NXyZ789012",
+        "refundedAmount": 0,
+        "refundStatus": "NONE",
+        "createdAt": "2026-10-18T08:05:00.000Z",
+        "updatedAt": "2026-10-18T08:06:12.000Z"
+      }
+    ],
+    "pagination": {
+      "total": 1,
+      "page": 1,
+      "limit": 20,
+      "totalPages": 1
+    }
+  }
+  ```
+
+#### `GET /v1/payments/:id`
+Retrieves complete details for a single payment.
+- **Access**: Protected (`x-api-key`)
+- **Response `200 OK`**: Returns the complete Payment document.
+
+#### `POST /v1/payments/verify`
+Directly verifies payment signature and updates payment status to `SUCCEEDED`.
+- **Access**: Protected (`x-api-key`)
+- **Request Body**:
+  ```json
+  {
+    "paymentId": "651a2c3d4e5f6a7b8c9d0e1f",
+    "razorpayOrderId": "order_NXyZ123456",
+    "razorpayPaymentId": "pay_NXyZ789012",
+    "razorpaySignature": "9b12a8b3..."
+  }
+  ```
+- **Response `200 OK`**:
+  ```json
+  {
+    "success": true,
+    "message": "Payment verified and recorded successfully",
+    "paymentId": "651a2c3d4e5f6a7b8c9d0e1f",
+    "status": "SUCCEEDED"
+  }
+  ```
+
+---
+
+### Checkout Endpoints (Public)
+
+#### `GET /v1/checkout/:id`
+Fetches sanitized payment metadata to render the customer-facing checkout UI.
+- **Access**: Public
+- **Response `200 OK`**:
+  ```json
+  {
+    "paymentId": "651a2c3d4e5f6a7b8c9d0e1f",
+    "amount": 25000,
+    "currency": "INR",
+    "status": "PROCESSING",
+    "customerEmail": "customer@example.com",
+    "customerPhone": "9876543210",
+    "razorpayOrderId": "order_NXyZ123456",
+    "razorpayKeyId": "rzp_test_your_key_id",
+    "merchant": {
+      "name": "Acme Retailers",
+      "email": "finance@acme.com"
+    }
+  }
+  ```
+
+#### `POST /v1/checkout/verify`
+Submits checkout credentials upon payment completion from the browser.
+- **Access**: Public
+- **Request Body**: Same as `/v1/payments/verify`.
+- **Response `200 OK`**: Confirms signature validity and credit to ledger.
+
+---
+
+### Ledger Endpoints
+
+#### `GET /v1/ledger/balance`
+Calculates available balance in real time using a MongoDB aggregation pipeline over all credit and debit entries.
+- **Access**: Protected (`x-api-key`)
+- **Response `200 OK`**:
+  ```json
+  {
+    "merchantId": "651a2b3c4d5e6f7a8b9c0d1e",
+    "balance": {
+      "currency": "INR",
+      "availableBalance": 20000,
+      "totalCredits": 25000,
+      "totalDebits": 5000
+    }
+  }
+  ```
+
+#### `GET /v1/ledger/entries`
+Retrieves paginated, immutable journal audit records.
+- **Access**: Protected (`x-api-key`)
+- **Query Parameters**: `page` (default 1), `limit` (default 20, max 50)
+- **Response `200 OK`**:
+  ```json
+  {
+    "data": [
+      {
+        "_id": "651a2e3f4a5b6c7d8e9f0a1b",
+        "merchantId": "651a2b3c4d5e6f7a8b9c0d1e",
+        "paymentId": {
+          "_id": "651a2c3d4e5f6a7b8c9d0e1f",
+          "customerEmail": "customer@example.com",
+          "status": "SUCCEEDED"
+        },
+        "refundId": null,
+        "type": "CREDIT",
+        "amount": 25000,
+        "currency": "INR",
+        "description": "Payment collected for 651a2c3d4e5f6a7b8c9d0e1f",
+        "createdAt": "2026-10-18T08:06:12.000Z"
+      }
+    ],
+    "pagination": {
+      "total": 1,
+      "page": 1,
+      "limit": 20,
+      "totalPages": 1
+    }
+  }
+  ```
+
+---
+
+### Refund Endpoints
+
+#### `POST /v1/refunds`
+Initiates a partial or full refund for a `SUCCEEDED` payment.
+- **Access**: Protected (`x-api-key` + `Idempotency-Key`)
+- **Request Body**:
+  ```json
+  {
+    "paymentId": "651a2c3d4e5f6a7b8c9d0e1f",
+    "amount": 5000,
+    "reason": "Customer returned merchandise"
+  }
+  ```
+  *(Note: Omitting `amount` defaults to the remaining unrefunded balance).*
+- **Response `202 Accepted`**:
+  ```json
+  {
+    "message": "Refund initiated successfully",
+    "refund": {
+      "_id": "651a2f4a5b6c7d8e9f0a1b2c",
+      "merchantId": "651a2b3c4d5e6f7a8b9c0d1e",
+      "paymentId": "651a2c3d4e5f6a7b8c9d0e1f",
+      "processorPaymentId": "pay_NXyZ789012",
+      "amount": 5000,
+      "currency": "INR",
+      "reason": "Customer returned merchandise",
+      "status": "PENDING"
+    }
+  }
+  ```
+
+#### `GET /v1/refunds`
+Lists refunds for the authenticated merchant.
+- **Access**: Protected (`x-api-key`)
+- **Query Parameters**: `status`, `search`, `page`, `limit`
+- **Response `200 OK`**: Paginated list of refunds.
+
+#### `GET /v1/refunds/:id`
+Retrieves a refund by its MongoDB ID or Razorpay refund ID.
+- **Access**: Protected (`x-api-key`)
+
+#### `GET /v1/refunds/payment/:paymentId`
+Lists all refunds issued against a specific payment.
+- **Access**: Protected (`x-api-key`)
+
+---
+
+### Inbound Webhook Endpoint
+
+#### `POST /v1/webhooks/razorpay`
+Inbound webhook receiver for Razorpay events (`payment.captured`, `order.paid`, `payment.failed`).
+- **Access**: Public (Requires valid `x-razorpay-signature` HTTP header)
+- **Signature Check**: Computes `crypto.createHmac("sha256", RAZORPAY_WEBHOOK_SECRET).update(req.rawBody).digest("hex")`.
+- **Handling**: Updates payment document, records ledger entry if captured, and enqueues merchant webhook dispatch.
+- **Response `200 OK`**: `{ "status": "ok" }`.
+
+---
+
+## 🏗 Core Architectural Mechanisms
+
+| Mechanism | Implementation Location | Description |
+| :--- | :--- | :--- |
+| **API Authentication** | [auth.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/middleware/auth.js) | SHA-256 hashes key; checks Redis cache (`auth:merchant:<hash>`, TTL 300s); queries MongoDB on miss. |
+| **Distributed Idempotency** | [idempotency.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/middleware/idempotency.js) | Redis `SET NX` key with 120s TTL lock; on completion, caches response status & body for 24h. Returns 409 if in-flight. |
+| **Transactional Outbox** | [outbox.model.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/payments/outbox.model.js), [outbox.relay.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/outbox.relay.js) | Decouples HTTP handlers from external services; polls pending events every 1.5s and enqueues into BullMQ. |
+| **Worker Concurrency & Locking** | [payment.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/payment.worker.js) | Atomic `findOneAndUpdate` sets `status: "PROCESSING"` and `processingLock: { workerId, lockedAt }`. |
+| **Ledger Immutability** | [ledger.model.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.model.js) | Mongoose pre-hook blocks `updateOne`, `deleteMany`, etc., throwing `LEDGER_IMMUTABILITY_VIOLATION`. |
+| **Ledger Balance Calculation** | [ledger.service.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.service.js) | MongoDB aggregation pipeline calculates `availableBalance = totalCredits - totalDebits`. |
+| **Refund Compensation** | [refund.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/refund.worker.js) | Pre-reserves refunded amount; on permanent upstream failure after 5 attempts, decrements `refundedAmount` automatically. |
+| **Self-Healing Reconciliation** | [reconciliation.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/reconciliation.worker.js) | Runs every 60s; checks payments in `PROCESSING` status > 3 min against Razorpay and heals orphaned payments. |
+| **Outbound Webhooks** | [webhook.worker.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/workers/webhook.worker.js) | Signs payload with merchant's `webhookSecret` (HMAC-SHA256) in `x-signature` header; retries up to 5 times. |
+
+---
+
+## ⚠️ Missing & Incomplete Functionality
+
+To maintain honest documentation, the following items in the current repository are highlighted:
+
+1. **Docker Compose File is Empty**: `backend/docker-compose.yml` is an empty file (0 bytes). Developers must start MongoDB and Redis manually or via custom container commands.
+2. **Automated Test Suite**: `backend/package.json` specifies `"test": "echo \"Error: no test specified\" && exit 1"`. There are currently no automated unit or integration test suites implemented.
+3. **Multi-Currency Ledger Balance Grouping**: The ledger stores currency per entry, but [getBalance](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/modules/ledger/ledger.service.js#L55-L92) returns `results[0]` (the first currency group encountered). A merchant transacting in multiple currencies will only see the first grouped currency returned.
+4. **Hardcoded Fallback DNS**: [app.js](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/backend/src/app.js#L2-L3) explicitly overrides DNS servers to `["8.8.8.8", "1.1.1.1"]` to prevent resolution failures in some local environments.
+5. **No Key Revocation or Rotation UI**: API keys and webhook secrets can be generated once upon registration, but there is no endpoint currently implemented to rotate or revoke them.
