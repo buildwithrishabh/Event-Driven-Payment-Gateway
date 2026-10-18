@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { getSessionPayments } from "../../lib/paymentStore.js";
 import { formatMoney, shortId, timeAgo } from "../../lib/format.js";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 const QUICK_PAGES = [
   { title: "Overview", path: "/", icon: LayoutDashboard },
@@ -26,10 +27,11 @@ const QUICK_PAGES = [
 ];
 
 export default function SearchModal({ isOpen, onClose }) {
+  const { merchant } = useAuth();
   const [query, setQuery] = useState("");
   const inputRef = useRef(null);
   const navigate = useNavigate();
-  const sessionPayments = getSessionPayments();
+  const sessionPayments = getSessionPayments(merchant?._id);
 
   useEffect(() => {
     if (isOpen) {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   RotateCcw,
   X,
@@ -32,7 +33,7 @@ export default function RefundModal({
   payment = null,
   onSuccess,
 }) {
-  const { apiKey } = useAuth();
+  const { apiKey, merchant } = useAuth();
   const toast = useToast();
 
   const [paymentId, setPaymentId] = useState("");
@@ -57,6 +58,18 @@ export default function RefundModal({
       setErrors({});
     }
   }, [isOpen, payment]);
+
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isOpen]);
 
   // Close on Escape key
   useEffect(() => {
@@ -175,21 +188,21 @@ export default function RefundModal({
     }
   }
 
-  const recentSucceededPayments = getSessionPayments().filter((p) => p.status === "SUCCEEDED");
+  const recentSucceededPayments = getSessionPayments(merchant?._id).filter((p) => p.status === "SUCCEEDED");
 
-  return (
-    <div className="fixed inset-0 z-50 p-4 sm:p-6 flex items-center justify-center animate-fade-in overflow-hidden">
-      {/* Backdrop */}
+  return createPortal(
+    <div className="fixed inset-0 z-50 p-4 sm:p-6 flex items-center justify-center animate-fade-in overflow-y-auto">
+      {/* Dark frosted glass backdrop */}
       <div
-        className="fixed inset-0 bg-ink-950/50 backdrop-blur-xs transition-opacity"
+        className="fixed inset-0 bg-ink-950/65 backdrop-blur-sm transition-opacity"
         onClick={() => {
           if (!submitting) onClose();
         }}
         aria-hidden="true"
       />
 
-      {/* Modal Dialog */}
-      <div className="relative w-full max-w-lg max-h-[88vh] flex flex-col rounded-2xl border border-ink-200 bg-white shadow-2xl transition-all overflow-hidden z-10 my-auto">
+      {/* Modal Dialog - Perfectly Centered in Viewport */}
+      <div className="relative w-full max-w-lg max-h-[88vh] flex flex-col rounded-2xl border border-ink-200/80 bg-white shadow-2xl transition-all overflow-hidden z-10 m-auto">
         {/* Header - Fixed at Top */}
         <div className="flex shrink-0 items-center justify-between border-b border-ink-100 px-6 py-4 bg-ink-50/40">
           <div className="flex items-center gap-2.5">
@@ -452,6 +465,7 @@ export default function RefundModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

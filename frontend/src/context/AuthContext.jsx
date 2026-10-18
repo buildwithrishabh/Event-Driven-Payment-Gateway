@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { ApiError, getProfile } from "../lib/api.js";
+import { clearSessionPayments } from "../lib/paymentStore.js";
 
 const STORAGE_KEY = "gateway.console.apiKey";
 
@@ -74,6 +75,7 @@ export function AuthProvider({ children }) {
     setStatus("idle");
     setError(null);
     persistKey("");
+    clearSessionPayments();
   }, [persistKey]);
 
   /** Refresh the cached profile (e.g. after key rotation or status change). */

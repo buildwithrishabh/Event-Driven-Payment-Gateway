@@ -17,7 +17,7 @@ import { Card, CardBody, CardHeader } from "../components/ui/Card.jsx";
 import RefundModal from "../components/refunds/RefundModal.jsx";
 
 export default function PaymentsPage() {
-  const { apiKey } = useAuth();
+  const { apiKey, merchant } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const paymentsFetch = useFetch(
@@ -88,7 +88,10 @@ export default function PaymentsPage() {
         customerEmail: form.customerEmail.trim(),
         ...(form.customerPhone.trim() ? { customerPhone: form.customerPhone.trim() } : {}),
       }, apiKey, idempotencyKey);
-      saveSessionPayment({ ...data, customerEmail: form.customerEmail.trim(), customerPhone: form.customerPhone.trim() });
+      saveSessionPayment(
+        { ...data, merchantId: merchant?._id || data.merchantId, customerEmail: form.customerEmail.trim(), customerPhone: form.customerPhone.trim() },
+        merchant?._id
+      );
       setReceipt({ payment: data, replay: idempotentReplay });
       paymentsFetch.refresh();
       if (idempotentReplay) toast.warning("Existing payment returned", `Payment ${shortId(data.paymentId)} was already created.`);
