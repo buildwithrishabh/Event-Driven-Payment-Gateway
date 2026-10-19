@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { Merchant } from "./merchant.model.js";
+import { logger } from "../../config/logger.js";
 
 // Helper function to hash raw string using sha-256
 export function hashKey(rawKey) {
@@ -48,7 +49,11 @@ export async function registerMerchant(req, res) {
       webhookSecret: rawWebhookSecret,
     });
   } catch (error) {
-    console.error("Merchant registration failed:", error);
+    logger.error("Merchant registration failed", {
+      email: req.body?.email,
+      error: error.message,
+      code: error.code,
+    });
     return res.status(500).json({ error: "Internal Server Error" });
   }
 }

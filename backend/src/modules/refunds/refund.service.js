@@ -3,6 +3,7 @@ import { Payment } from "../payments/payment.model.js";
 import { Refund } from "./refund.model.js";
 import { OutboxEvent } from "../payments/outbox.model.js";
 import { refundQueue } from "../../queues/refund.queue.js";
+import { logger } from "../../config/logger.js";
 
 // Request a refund and persist outbox event
 export async function createRefund({ merchantId, paymentId, amount, reason }) {
@@ -128,7 +129,10 @@ export async function createRefund({ merchantId, paymentId, amount, reason }) {
       )
       .catch((err) => {
         // Outbox relay fallback is available even if this fails
-        console.warn("Direct queue add failed, outbox relay will pick it up:", err.message);
+        logger.warn("Direct queue add failed for refund, outbox relay will pick it up", {
+          refundId: refund._id.toString(),
+          error: err.message,
+        });
       });
 
     return refund;

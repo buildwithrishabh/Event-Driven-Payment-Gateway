@@ -3,6 +3,7 @@ import { Payment } from "./payment.model.js";
 import { OutboxEvent } from "./outbox.model.js";
 import { verifyPaymentSignature } from "../processors/razorpay.processor.js";
 import { recordCredit } from "../ledger/ledger.service.js";
+import { logger } from "../../config/logger.js";
 
 // POST /v1/payments
 export async function createPayment(req, res) {
@@ -75,7 +76,11 @@ export async function createPayment(req, res) {
   } catch (error) {
     // Agar koi bhi error aaye to transaction rollback karo
     await session.abortTransaction();
-    console.error("Failed to create payment:", error);
+    logger.error("Failed to create payment", {
+      merchantId: req.merchant?._id,
+      error: error.message,
+      stack: error.stack,
+    });
 
     if (error.name === "ValidationError") {
       return res.status(400).json({ error: error.message });
@@ -108,7 +113,11 @@ export async function getPaymentById(req, res) {
 
     return res.json(payment);
   } catch (error) {
-    console.error("Failed to retrieve payment:", error);
+    logger.error("Failed to retrieve payment", {
+      paymentId: req.params?.id,
+      merchantId: req.merchant?._id,
+      error: error.message,
+    });
     return res.status(500).json({ error: "Failed to retrieve payment" });
   }
 }
@@ -174,7 +183,12 @@ export async function verifyPayment(req, res) {
       status: payment.status,
     });
   } catch (error) {
-    console.error("Payment verification failed:", error);
+    logger.error("Payment verification failed", {
+      paymentId: req.body?.paymentId,
+      merchantId: req.merchant?._id,
+      error: error.message,
+      stack: error.stack,
+    });
     return res.status(500).json({ error: "Failed to verify payment" });
   }
 }
@@ -219,7 +233,10 @@ export async function getPayment(req, res) {
       },
     });
   } catch (error) {
-    console.error("Failed to list payments:", error);
+    logger.error("Failed to list payments", {
+      merchantId: req.merchant?._id,
+      error: error.message,
+    });
     return res.status(500).json({ error: "Failed to retrieve payments" });
   }
 }

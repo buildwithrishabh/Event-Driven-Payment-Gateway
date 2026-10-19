@@ -1,6 +1,7 @@
 import { Merchant } from "../modules/merchants/merchant.model.js";
 import { hashKey } from "../modules/merchants/merchant.controller.js";
 import { redisClient } from "../config/redis.js";
+import { logger } from "../config/logger.js";
 
 export async function authenticateApiKey(req, res, next) {
   const apiKey = req.header("x-api-key");
@@ -50,7 +51,12 @@ export async function authenticateApiKey(req, res, next) {
     req.merchant = merchantData;
     return next();
   } catch (error) {
-    console.error("Auth error:", error);
+    logger.error("Authentication internal failure", {
+      error: error.message,
+      stack: error.stack,
+      url: req.originalUrl,
+      method: req.method,
+    });
     return res.status(500).json({ error: "Authentication internal failure" });
   }
 }

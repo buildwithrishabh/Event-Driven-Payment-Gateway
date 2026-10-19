@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { razorpayClient } from "../../config/razorpay.js";
+import { logger } from "../../config/logger.js";
 
 export async function createOrder({ amount, currency, receipt, notes = {} }) {
   try {
@@ -18,9 +19,14 @@ export async function createOrder({ amount, currency, receipt, notes = {} }) {
       status: order.status,
     };
   } catch (error) {
-    console.error("Razorpay order creation error:", error);
+    logger.error("Razorpay order creation failed", {
+      receipt: String(receipt),
+      currency,
+      error: error.error?.description || error.message,
+      code: error.error?.code,
+    });
     throw new Error(
-      `Razorpay Error: ${error.error?.description || error.message}`,
+      `Razorpay Error: ${error.error?.description || error.message}`
     );
   }
 }

@@ -1,4 +1,5 @@
 import { redisClient } from "../config/redis.js";
+import { logger } from "../config/logger.js";
 
 export function idempotency(options = { ttlSeconds: 86400 }) {
   // default cache 24 hours
@@ -81,7 +82,10 @@ export function idempotency(options = { ttlSeconds: 86400 }) {
         redisClient
           .set(redisKey, JSON.stringify(record), "EX", options.ttlSeconds)
           .catch((error) => {
-            console.error("Failed to save idempotency response to Redis:", error);
+            logger.warn("Failed to save idempotency response to Redis", {
+              redisKey,
+              error: error.message,
+            });
           });
 
         return originalJson(body);
@@ -89,7 +93,6 @@ export function idempotency(options = { ttlSeconds: 86400 }) {
 
       return next();
     } catch (error) {
-      console.error("Idempotency middleware error:", error);
       return next(error);
     }
   };

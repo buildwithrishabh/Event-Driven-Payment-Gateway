@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { Payment } from "../payments/payment.model.js";
 import { recordCredit } from "../ledger/ledger.service.js";
 import { webhookQueue } from "../../queues/webhook.queue.js";
+import { logger } from "../../config/logger.js";
 
 export async function handleRazorpayWebhook(req, res) {
   const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -15,12 +16,12 @@ export async function handleRazorpayWebhook(req, res) {
     .digest("hex");
 
   if (!signature || signature !== expectedSignature) {
-    console.error("❌ Invalid Razorpay Webhook Signature!");
+    logger.warn("❌ Invalid Razorpay Webhook Signature");
     return res.status(400).json({ error: "Invalid webhook signature" });
   }
 
   const { event, payload } = req.body;
-  console.log("📥 Received verified Razorpay event:", event);
+  logger.info("📥 Received verified Razorpay event", { event });
 
   try {
     if (event === "payment.captured" || event === "order.paid") {
@@ -28,13 +29,13 @@ export async function handleRazorpayWebhook(req, res) {
       const orderId = razorpayPayment?.order_id || payload.order?.entity?.id;
 
       if (!orderId) {
-        console.warn("⚠️ No order ID found in Razorpay event payload");
+        logger.warn("⚠️ No order ID found in Razorpay event payload", { event });
         return res.status(200).json({ status: "ignored_no_order_id" });
       }
 
       const payment = await Payment.findOne({ razorpayOrderId: orderId });
       if (!payment) {
-        console.warn(`⚠️ Payment document not found for razorpayOrderId: ${orderId}`);
+        logger.warn("⚠️ Payment document not found for razorpayOrderId", { orderId, event });
         return res.status(200).json({ status: "ignored_payment_not_found" });
       }
 
@@ -76,13 +77,13 @@ export async function handleRazorpayWebhook(req, res) {
       const orderId = razorpayPayment?.order_id;
 
       if (!orderId) {
-        console.warn("⚠️ No order ID found in payment.failed event payload");
+        logger.warn("⚠️ No order ID found in payment.failed event payload", { event });
         return res.status(200).json({ status: "ignored_no_order_id" });
       }
 
       const payment = await Payment.findOne({ razorpayOrderId: orderId });
       if (!payment) {
-        console.warn(`⚠️ Payment document not found for razorpayOrderId: ${orderId}`);
+        logger.warn("⚠️ Payment document not found for razorpayOrderId", { orderId, event });
         return res.status(200).json({ status: "ignored_payment_not_found" });
       }
 
@@ -110,7 +111,11 @@ export async function handleRazorpayWebhook(req, res) {
 
     return res.status(200).json({ status: "ok" });
   } catch (error) {
-    console.error("❌ Error processing Razorpay webhook:", error);
+    logger.error("❌ Error processing Razorpay webhook", {
+      error: error.message,
+      stack: error.stack,
+      event,
+    });
     return res.status(500).json({ error: "Internal processing error" });
   }
 }

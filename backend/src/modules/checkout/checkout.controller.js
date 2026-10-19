@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { Payment } from "../payments/payment.model.js";
 import { verifyPaymentSignature } from "../processors/razorpay.processor.js";
 import { recordCredit } from "../ledger/ledger.service.js";
+import { logger } from "../../config/logger.js";
 
 // GET /v1/checkout/:id
 export async function getCheckoutSession(req, res) {
@@ -40,7 +41,10 @@ export async function getCheckoutSession(req, res) {
       updatedAt: payment.updatedAt,
     });
   } catch (error) {
-    console.error("Failed to fetch checkout session:", error);
+    logger.error("Failed to fetch checkout session", {
+      paymentId: req.params?.id,
+      error: error.message,
+    });
     return res
       .status(500)
       .json({ error: "Failed to retrieve checkout session" });
@@ -101,7 +105,11 @@ export async function verifyCheckoutPayment(req, res) {
       status: payment.status,
     });
   } catch (error) {
-    console.error("Checkout verification failed:", error);
+    logger.error("Checkout verification failed", {
+      paymentId: req.body?.paymentId,
+      error: error.message,
+      stack: error.stack,
+    });
     return res.status(500).json({ error: "Failed to verify checkout payment" });
   }
 }

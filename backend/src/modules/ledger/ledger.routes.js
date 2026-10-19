@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { getBalance, getLedgerEntries } from "./ledger.service.js";
 import { authenticateApiKey } from "../../middleware/auth.js";
+import { logger } from "../../config/logger.js";
 
 const router = Router();
 
@@ -13,7 +14,10 @@ router.get("/balance", authenticateApiKey, async (req, res) => {
       balance,
     });
   } catch (error) {
-    console.error("Failed to get ledger balance:", error);
+    logger.error("Failed to compute ledger balance", {
+      merchantId: req.merchant?._id,
+      error: error.message,
+    });
     return res.status(500).json({ error: "Failed to compute balance" });
   }
 });
@@ -23,7 +27,10 @@ router.get("/entries", authenticateApiKey, async (req, res) => {
     const result = await getLedgerEntries(req.merchant._id, req.query);
     return res.json(result);
   } catch (error) {
-    console.error("Failed to get ledger entries:", error);
+    logger.error("Failed to fetch ledger entries", {
+      merchantId: req.merchant?._id,
+      error: error.message,
+    });
     return res.status(500).json({ error: "Failed to fetch ledger entries" });
   }
 });
