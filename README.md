@@ -12,6 +12,10 @@
 > **A production-grade, distributed fintech engine that guarantees zero double-charges, zero lost events, mathematically immutable financial balances, and full-stack Prometheus/Grafana observability.**  
 > Built with Node.js (Express 5), MongoDB Replica Sets, Redis, BullMQ, Razorpay SDK, Prometheus, Grafana, and a React 18 Merchant Dashboard.
 
+📚 **Deep-Dive Guides:**
+- 🏛️ [System Architecture & Technical Design](./ARCHITECTURE.md)
+- 📊 [Observability, Monitoring & Testing Guide](./OBSERVABILITY_AND_TESTING.md)
+
 ---
 
 ## 🎯 The Core Problem & Why This Exists
