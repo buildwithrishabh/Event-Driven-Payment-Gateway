@@ -9,7 +9,11 @@ if (process.env.NODE_ENV !== "production") {
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
-import { register, httpRequestDuration, updateQueueMetrics } from "./config/metrics.js";
+import {
+  register,
+  httpRequestDuration,
+  updateQueueMetrics,
+} from "./config/metrics.js";
 import { connectDB } from "./config/db.js";
 import { redisClient } from "./config/redis.js";
 import { logger } from "./config/logger.js";
@@ -22,9 +26,9 @@ import merchantsRoutes from "./modules/merchants/merchant.routes.js";
 import paymentRoutes from "./modules/payments/payment.routes.js";
 import ledgerRoutes from "./modules/ledger/ledger.routes.js";
 import { startOutboxRelay } from "./workers/outbox.relay.js";
-import "./workers/payment.worker.js";
-import "./workers/webhook.worker.js";
-import "./workers/refund.worker.js";
+import { paymentWorker } from "./workers/payment.worker.js";
+import { webhookWorker } from "./workers/webhook.worker.js";
+import { refundWorker } from "./workers/refund.worker.js";
 import webhookRoutes from "./modules/webhooks/webhook.routes.js";
 import { startReconciliationWorker } from "./workers/reconciliation.worker.js";
 import checkoutRoutes from "./modules/checkout/checkout.routes.js";
@@ -37,7 +41,19 @@ const PORT = process.env.PORT || 3000;
 
 // security and parsing middleware
 app.use(helmet());
-app.use(cors());
+
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  process.env.FRONTEND_URL, // e.g. https://your-actual-app.vercel.app
+].filter(Boolean);
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+  }),
+);
+
 app.use(
   express.json({
     verify: (req, res, buf) => {
@@ -124,7 +140,16 @@ async function gracefulShutdown(signal, server, timers) {
       if (timers.outboxTimer) clearInterval(timers.outboxTimer);
       if (timers.reconciliationTimer) clearInterval(timers.reconciliationTimer);
 
-      // 3. Close database and redis connection
+      // 3. Gracefully close BullMQ workers so active in-flight jobs finish cleanly
+      logger.info("Closing background workers...");
+      await Promise.allSettled([
+        paymentWorker.close(),
+        webhookWorker.close(),
+        refundWorker.close(),
+      ]);
+      logger.info("All BullMQ workers stopped");
+
+      // 4. Close database and redis connection
       await mongoose.connection.close(false);
       logger.info("MongoDB connection closed");
 
@@ -147,5 +172,18 @@ async function gracefulShutdown(signal, server, timers) {
     process.exit(1);
   }, 15000);
 }
+
+// Global crash shield: Log unhandled promise rejections without crashing the server
+process.on("unhandledRejection", (reason, promise) => {
+  logger.error("Unhandled Rejection:", { reason, promise });
+});
+
+// Global crash shield: Log uncaught exceptions
+process.on("uncaughtException", (error) => {
+  logger.error("Uncaught Exception:", {
+    error: error.message,
+    stack: error.stack,
+  });
+});
 
 startServer();
