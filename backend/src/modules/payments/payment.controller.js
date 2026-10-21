@@ -1,4 +1,4 @@
-import mongoose, { mongo } from "mongoose";
+import mongoose from "mongoose";
 import { Payment } from "./payment.model.js";
 import { OutboxEvent } from "./outbox.model.js";
 import { verifyPaymentSignature } from "../processors/razorpay.processor.js";

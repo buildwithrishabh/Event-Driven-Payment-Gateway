@@ -14,14 +14,14 @@ export const webhookWorker = new Worker(
     const merchant = await Merchant.findById(merchantId);
     if (!merchant || !merchant.webhookUrl) {
       logger.info(
-        `Merchant ${merchantId} has no webhook URL configured. Skipping.`
+        `Merchant ${merchantId} has no webhook URL configured. Skipping.`,
       );
       return;
     }
 
     if (!merchant.webhookSecret) {
       logger.warn(
-        `Merchant ${merchantId} has no webhookSecret configured. Skipping.`
+        `Merchant ${merchantId} has no webhookSecret configured. Skipping.`,
       );
       return;
     }
@@ -41,7 +41,7 @@ export const webhookWorker = new Worker(
     };
 
     logger.info(
-      `🚀 Sending webhook [${eventType}] to ${merchant.webhookUrl} (Attempt ${job.attemptsMade + 1})`
+      `🚀 Sending webhook [${eventType}] to ${merchant.webhookUrl} (Attempt ${job.attemptsMade + 1})`,
     );
 
     let responseStatus = null;
@@ -98,10 +98,11 @@ export const webhookWorker = new Worker(
             status: "FAILED",
           });
         } catch (dbErr) {
-          logger.error("Failed to record webhook delivery error in DB:", { error: dbErr.message });
+          logger.error("Failed to record webhook delivery error in DB:", {
+            error: dbErr.message,
+          });
         }
       }
-
 
       logger.error(
         `❌ Webhook delivery error (Attempt ${job.attemptsMade + 1}): ${err.message}`,

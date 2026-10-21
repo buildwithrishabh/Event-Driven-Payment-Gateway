@@ -65,8 +65,10 @@ export const refundWorker = new Worker(
       if (webhookQueue) {
         await webhookQueue.add("dispatch-webhook", {
           merchantId: refund.merchantId.toString(),
-          event: "refund.succeeded",
+          paymentId: refund.paymentId,
+          eventType: "refund.succeeded",
           payload: {
+            event: "refund.succeeded",
             refundId: refund._id,
             paymentId: refund.paymentId,
             amount: refund.amount,
@@ -114,8 +116,10 @@ export const refundWorker = new Worker(
         if (webhookQueue) {
           await webhookQueue.add("dispatch-webhook", {
             merchantId: refund.merchantId.toString(),
-            event: "refund.failed",
+            paymentId: refund.paymentId,
+            eventType: "refund.failed",
             payload: {
+              event: "refund.failed",
               refundId: refund._id,
               paymentId: refund.paymentId,
               amount: refund.amount,
