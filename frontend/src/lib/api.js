@@ -116,7 +116,7 @@ export function getProfile(apiKey) {
 
 /**
  * POST /v1/payments — create a payment (requires x-api-key + Idempotency-Key).
- * @param {{ amount: number, currency?: string, customerEmail: string, customerPhone?: string }} payload
+ * @param {{ amount: number, currency?: string, customerName: string, customerEmail: string, customerPhone?: string }} payload
  */
 export function createPayment(payload, apiKey, idempotencyKey) {
   return request("/v1/payments", {

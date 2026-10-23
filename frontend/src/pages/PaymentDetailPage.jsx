@@ -215,6 +215,7 @@ export default function PaymentDetailPage() {
                       />
                     </span>
                   </InfoRow>
+                  <InfoRow label="Customer Name" value={payment.customerName || "—"} />
                   <InfoRow label="Customer Email" value={payment.customerEmail || "—"} />
                   {payment.customerPhone && (
                     <InfoRow label="Customer Phone" value={payment.customerPhone} />

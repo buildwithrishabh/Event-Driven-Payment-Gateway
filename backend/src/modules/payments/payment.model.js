@@ -24,6 +24,11 @@ const paymentSchema = new mongoose.Schema({
     default: "CREATED",
     index: true,
   },
+  customerName: {
+    type: String,
+    required: true,
+    trim: true,
+  },
   customerEmail: {
     type: String,
     required: true,

@@ -58,6 +58,11 @@ export const createPaymentSchema = z.object({
       .length(3, "currency must be a 3-letter ISO code")
       .default("INR")
       .transform((val) => val.toUpperCase()),
+    customerName: z
+      .string({ required_error: "customerName is required" })
+      .trim()
+      .min(2, "customerName must be at least 2 characters")
+      .max(100, "customerName cannot exceed 100 characters"),
     customerEmail: z
       .string({ required_error: "customerEmail is required" })
       .trim()

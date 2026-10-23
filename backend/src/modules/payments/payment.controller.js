@@ -8,7 +8,7 @@ import { logger } from "../../config/logger.js";
 
 // POST /v1/payments
 export async function createPayment(req, res) {
-  const { amount, currency, customerEmail, customerPhone } = req.body;
+  const { amount, currency, customerName, customerEmail, customerPhone } = req.body;
 
   if (!amount || typeof amount !== "number" || amount < 100) {
     return res.status(400).json({
@@ -17,9 +17,9 @@ export async function createPayment(req, res) {
     });
   }
 
-  if (!customerEmail) {
+  if (!customerEmail || !customerName) {
     return res.status(400).json({
-      error: "customerEmail is required",
+      error: "customerName and customerEmail is required",
     });
   }
 
@@ -35,6 +35,7 @@ export async function createPayment(req, res) {
           merchantId: req.merchant._id,
           amount,
           currency: (currency || "INR").toUpperCase(),
+          customerName,
           customerEmail,
           customerPhone: customerPhone || null,
           status: "CREATED",
@@ -55,6 +56,7 @@ export async function createPayment(req, res) {
             merchantId: req.merchant._id,
             amount: payment.amount,
             currency: payment.currency,
+            customerName: payment.customerName,
             customerEmail: payment.customerEmail,
           },
           status: "PENDING",
@@ -69,6 +71,8 @@ export async function createPayment(req, res) {
     return res.status(201).json({
       paymentId: payment._id,
       merchantId: payment.merchantId,
+      customerName: payment.customerName,
+      customerEmail: payment.customerEmail,
       amount: payment.amount,
       currency: payment.currency,
       status: payment.status,
@@ -245,9 +249,12 @@ export async function getPayment(req, res) {
       query.status = status.toUpperCase();
     }
 
-    // search by customer email
+    // search by customer email or customer name
     if (search) {
-      query.customerEmail = { $regex: search.trim(), $options: "i" };
+      query.$or = [
+        { customerEmail: { $regex: search.trim(), $options: "i" } },
+        { customerName: { $regex: search.trim(), $options: "i" } },
+      ];
     }
 
     const pageNum = Math.max(1, parseInt(page, 10));

@@ -31,7 +31,7 @@ export default function PaymentsPage() {
     paymentId: p.paymentId || p._id,
   }));
 
-  const [form, setForm] = useState({ amount: "", currency: "INR", customerEmail: "", customerPhone: "" });
+  const [form, setForm] = useState({ amount: "", currency: "INR", customerName: "", customerEmail: "", customerPhone: "" });
   const [idempotencyKey, setIdempotencyKey] = useState(() => generateIdempotencyKey("pay"));
   const [search, setSearch] = useState("");
   const [lookupId, setLookupId] = useState("");
@@ -58,7 +58,7 @@ export default function PaymentsPage() {
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return [...payments].filter((payment) => !query || [payment.paymentId, payment.customerEmail, payment.status].some((value) => String(value || "").toLowerCase().includes(query))).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return [...payments].filter((payment) => !query || [payment.paymentId, payment.customerName, payment.customerEmail, payment.status].some((value) => String(value || "").toLowerCase().includes(query))).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [payments, search]);
 
   function update(field) {
@@ -72,6 +72,7 @@ export default function PaymentsPage() {
     const next = {};
     if (!form.amount || !Number.isFinite(Number(form.amount))) next.amount = "Enter a valid amount.";
     else if (!Number.isFinite(minorAmount) || minorAmount < 100) next.amount = "Minimum payment amount is 1.00.";
+    if (!form.customerName || form.customerName.trim().length < 2) next.customerName = "Enter customer name (at least 2 chars).";
     if (!form.customerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.customerEmail)) next.customerEmail = "Enter a valid email address.";
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -85,11 +86,12 @@ export default function PaymentsPage() {
       const { data, idempotentReplay } = await createPayment({
         amount: minorAmount,
         currency: form.currency,
+        customerName: form.customerName.trim(),
         customerEmail: form.customerEmail.trim(),
         ...(form.customerPhone.trim() ? { customerPhone: form.customerPhone.trim() } : {}),
       }, apiKey, idempotencyKey);
       saveSessionPayment(
-        { ...data, merchantId: merchant?._id || data.merchantId, customerEmail: form.customerEmail.trim(), customerPhone: form.customerPhone.trim() },
+        { ...data, merchantId: merchant?._id || data.merchantId, customerName: form.customerName.trim(), customerEmail: form.customerEmail.trim(), customerPhone: form.customerPhone.trim() },
         merchant?._id
       );
       setReceipt({ payment: data, replay: idempotentReplay });
@@ -97,7 +99,7 @@ export default function PaymentsPage() {
       if (idempotentReplay) toast.warning("Existing payment returned", `Payment ${shortId(data.paymentId)} was already created.`);
       else toast.success("Payment created", `Payment ${shortId(data.paymentId)}`);
       setIdempotencyKey(generateIdempotencyKey("pay"));
-      setForm((current) => ({ ...current, amount: "", customerEmail: "", customerPhone: "" }));
+      setForm((current) => ({ ...current, amount: "", customerName: "", customerEmail: "", customerPhone: "" }));
     } catch (error) {
       toast.error("Payment failed", error.message);
     } finally {
@@ -188,6 +190,15 @@ export default function PaymentsPage() {
                   </option>
                 ))}
               </Select>
+              <Input
+                label="Customer name"
+                type="text"
+                placeholder="Rishabh Sharma"
+                value={form.customerName}
+                onChange={update("customerName")}
+                error={errors.customerName}
+                required
+              />
               <Input
                 label="Customer email"
                 type="email"
@@ -319,7 +330,8 @@ export default function PaymentsPage() {
                           </div>
                         </td>
                         <td className="max-w-[180px] truncate px-5 py-3.5 text-xs text-ink-600">
-                          {payment.customerEmail || "—"}
+                          <span className="font-medium text-ink-900 block truncate">{payment.customerName || "—"}</span>
+                          <span className="text-[11px] text-ink-500 block truncate">{payment.customerEmail || "—"}</span>
                         </td>
                         <td className="whitespace-nowrap px-5 py-3.5 text-xs font-semibold text-ink-900">
                           <div>

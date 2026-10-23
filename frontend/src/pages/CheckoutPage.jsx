@@ -162,6 +162,7 @@ export default function CheckoutPage() {
       description: `Payment for Order #${shortId(payment.paymentId || payment._id || id)}`,
       order_id: orderId,
       prefill: {
+        name: payment.customerName || undefined,
         email: payment.customerEmail || undefined,
         contact: payment.customerPhone || undefined,
       },
@@ -385,6 +386,15 @@ export default function CheckoutPage() {
 
               {/* Customer & Transaction details */}
               <div className="space-y-3 text-xs border-t border-ink-100 pt-5">
+                {payment.customerName && (
+                  <div className="flex justify-between items-center text-ink-500">
+                    <span>Customer</span>
+                    <span className="text-ink-800 font-medium truncate max-w-[200px]" title={payment.customerName}>
+                      {payment.customerName}
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex justify-between items-center text-ink-500">
                   <span>Customer Email</span>
                   <span className="text-ink-800 font-medium truncate max-w-[200px]" title={payment.customerEmail}>

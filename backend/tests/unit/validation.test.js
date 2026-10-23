@@ -130,6 +130,7 @@ describe("Zod Validation Middleware & Schemas Unit Tests", () => {
       const parsed = await createPaymentSchema.parseAsync({
         body: {
           amount: 2500,
+          customerName: "Rishabh Sharma",
           customerEmail: "pay@customer.com",
           currency: "inr",
         },
@@ -137,19 +138,34 @@ describe("Zod Validation Middleware & Schemas Unit Tests", () => {
 
       expect(parsed.body.amount).toBe(2500);
       expect(parsed.body.currency).toBe("INR");
+      expect(parsed.body.customerName).toBe("Rishabh Sharma");
       expect(parsed.body.customerEmail).toBe("pay@customer.com");
     });
 
     it("createPaymentSchema: should reject amount < 100 or non-integer", async () => {
       await expect(
         createPaymentSchema.parseAsync({
-          body: { amount: 99, customerEmail: "pay@customer.com" },
+          body: { amount: 99, customerName: "Rishabh", customerEmail: "pay@customer.com" },
         })
       ).rejects.toThrow();
 
       await expect(
         createPaymentSchema.parseAsync({
-          body: { amount: 150.5, customerEmail: "pay@customer.com" },
+          body: { amount: 150.5, customerName: "Rishabh", customerEmail: "pay@customer.com" },
+        })
+      ).rejects.toThrow();
+    });
+
+    it("createPaymentSchema: should reject missing or invalid customerName", async () => {
+      await expect(
+        createPaymentSchema.parseAsync({
+          body: { amount: 2500, customerEmail: "pay@customer.com" },
+        })
+      ).rejects.toThrow();
+
+      await expect(
+        createPaymentSchema.parseAsync({
+          body: { amount: 2500, customerName: "A", customerEmail: "pay@customer.com" },
         })
       ).rejects.toThrow();
     });
