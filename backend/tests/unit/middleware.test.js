@@ -5,6 +5,7 @@ vi.mock("../../src/config/redis.js", () => ({
   redisClient: {
     get: vi.fn(),
     set: vi.fn(),
+    del: vi.fn(),
   },
 }));
 
@@ -235,6 +236,25 @@ describe("Middleware Unit Tests", () => {
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.body).toEqual({ paymentId: "pay_done_1" });
       expect(next).not.toHaveBeenCalled();
+    });
+
+    it("should delete idempotency lock and NOT cache when response is a 5xx error", async () => {
+      const { req, res, next } = createMockReqRes({ method: "POST" });
+      req.header.mockReturnValue("idem_key_error");
+      req.merchant = { _id: "m_123" };
+
+      redisClient.set.mockResolvedValue("OK");
+      redisClient.del.mockResolvedValue(1);
+
+      await middleware(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+
+      // Simulate controller failing with 500 error
+      res.status(500);
+      res.json({ error: "Database failure" });
+
+      expect(redisClient.del).toHaveBeenCalledWith("idempotency:m_123:idem_key_error");
     });
   });
 

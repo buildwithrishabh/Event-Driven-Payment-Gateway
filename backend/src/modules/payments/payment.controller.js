@@ -3,6 +3,7 @@ import { Payment } from "./payment.model.js";
 import { OutboxEvent } from "./outbox.model.js";
 import { verifyPaymentSignature } from "../processors/razorpay.processor.js";
 import { recordCredit } from "../ledger/ledger.service.js";
+import { webhookQueue } from "../../queues/webhook.queue.js";
 import { logger } from "../../config/logger.js";
 
 // POST /v1/payments
@@ -183,6 +184,7 @@ export async function verifyPayment(req, res) {
     if (payment.status !== "SUCCEEDED") {
       payment.status = "SUCCEEDED";
       payment.razorpayPaymentId = razorpayPaymentId;
+      payment.razorpaySignature = razorpaySignature;
       payment.failureReason = null;
       await payment.save();
 
@@ -193,6 +195,27 @@ export async function verifyPayment(req, res) {
         amount: payment.amount,
         currency: payment.currency,
       });
+
+      // Dispatch webhook notification to merchant
+      if (webhookQueue) {
+        await webhookQueue.add("send-webhook", {
+          merchantId: payment.merchantId.toString(),
+          paymentId: payment._id,
+          eventType: "payment.succeeded",
+          payload: {
+            event: "payment.succeeded",
+            data: {
+              paymentId: payment._id,
+              razorpayOrderId: payment.razorpayOrderId,
+              razorpayPaymentId: payment.razorpayPaymentId,
+              amount: payment.amount,
+              currency: payment.currency,
+              status: "SUCCEEDED",
+              createdAt: payment.createdAt,
+            },
+          },
+        });
+      }
     }
     return res.json({
       success: true,

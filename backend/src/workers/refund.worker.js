@@ -34,6 +34,7 @@ export const refundWorker = new Worker(
         refund.processorPaymentId,
         {
           amount: refund.amount,
+          receipt: refund._id.toString(),
           notes: {
             reason: refund.reason,
             gatewayRefundId: refund._id.toString(),
@@ -84,7 +85,14 @@ export const refundWorker = new Worker(
       );
 
       const maxAttempts = job.opts?.attempts || 5;
-      const isLastAttempt = job.attemptsMade + 1 >= maxAttempts;
+
+      // check if error is non-retriable (client/validation error from Razorpay like 400 or BAD_Request)
+      const isfatalClientError =
+        error?.statusCode === 400 ||
+        error?.error?.code === "BAD_REQUEST_ERROR" ||
+        error?.error?.code === "GATEWAY_ERROR";
+
+      const isLastAttempt =( job.attemptsMade + 1 >= maxAttempts) || isfatalClientError;
 
       // Rollback payment.refundedAmount in DB on terminal failure
       if (isLastAttempt) {
@@ -132,6 +140,11 @@ export const refundWorker = new Worker(
               reason: refund.failureReason,
             },
           });
+        }
+
+        // Fatal client error par retry throw na karein, job ko cleanly exit karein
+        if (isfatalClientError) {
+          return;
         }
       }
 

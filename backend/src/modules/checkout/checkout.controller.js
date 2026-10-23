@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { Payment } from "../payments/payment.model.js";
 import { verifyPaymentSignature } from "../processors/razorpay.processor.js";
 import { recordCredit } from "../ledger/ledger.service.js";
+import { webhookQueue } from "../../queues/webhook.queue.js";
 import { logger } from "../../config/logger.js";
 
 // GET /v1/checkout/:id
@@ -118,6 +119,27 @@ export async function verifyCheckoutPayment(req, res) {
         amount: payment.amount,
         currency: payment.currency,
       });
+
+      // Dispatch webhook notification to merchant
+      if (webhookQueue) {
+        await webhookQueue.add("send-webhook", {
+          merchantId: payment.merchantId.toString(),
+          paymentId: payment._id,
+          eventType: "payment.succeeded",
+          payload: {
+            event: "payment.succeeded",
+            data: {
+              paymentId: payment._id,
+              razorpayOrderId: payment.razorpayOrderId,
+              razorpayPaymentId: payment.razorpayPaymentId,
+              amount: payment.amount,
+              currency: payment.currency,
+              status: "SUCCEEDED",
+              createdAt: payment.createdAt,
+            },
+          },
+        });
+      }
     }
     return res.json({
       success: true,

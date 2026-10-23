@@ -72,7 +72,21 @@ export function idempotency(options = { ttlSeconds: 86400 }) {
       res.json = (body) => {
         res.json = originalJson;
 
-        // Cache the successful/failed response payload
+        // Do NOT cache internal server errors (5xx) as completed.
+        // Delete the lock key so clients can safely retry once the server recovers.
+        if (res.statusCode >= 500) {
+          redisClient
+            .del(redisKey)
+            .catch((error) => {
+              logger.warn("Failed to delete idempotency key after 5xx error", {
+                redisKey,
+                error: error.message,
+              });
+            });
+          return originalJson(body);
+        }
+
+        // Cache the successful/client response payload
         const record = {
           state: "COMPLETED",
           statusCode: res.statusCode,

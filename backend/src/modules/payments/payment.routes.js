@@ -22,8 +22,8 @@ router.get("/", authenticateApiKey, validate(listPaymentsQuerySchema), getPaymen
 router.post(
   "/",
   authenticateApiKey,
-  idempotency(),
   validate(createPaymentSchema),
+  idempotency(),
   createPayment,
 );
 router.post("/verify", authenticateApiKey, validate(verifyPaymentSchema), verifyPayment);

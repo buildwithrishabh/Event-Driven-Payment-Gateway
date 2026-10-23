@@ -24,8 +24,8 @@ router.get("/", authenticateApiKey, validate(listRefundsQuerySchema), listRefund
 router.post(
   "/",
   authenticateApiKey,
-  idempotency(),
   validate(createRefundSchema),
+  idempotency(),
   createRefund,
 );
 

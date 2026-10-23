@@ -1,13 +1,5 @@
 import { z } from "zod";
 
-/**
- * Universal validation middleware using Zod schemas.
- * Validates request body, query parameters, and URL route params.
- * Sanitizes input (strips unknown fields) and coerces types (e.g. query strings to numbers).
- *
- * @param {z.ZodSchema} schema - The Zod schema to validate against
- * @returns {Function} Express middleware function
- */
 export function validate(schema) {
   return async (req, res, next) => {
     try {

@@ -264,7 +264,7 @@ describe("Zod Validation Middleware & Schemas Unit Tests", () => {
     it("listRefundsQuerySchema: should validate refund status enum", async () => {
       await expect(
         listRefundsQuerySchema.parseAsync({
-          query: { status: "PROCESSED" },
+          query: { status: "SUCCEEDED" },
         })
       ).resolves.toBeDefined();
 

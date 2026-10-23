@@ -140,7 +140,7 @@ export const listPaymentRefundsSchema = z.object({
 export const listRefundsQuerySchema = z.object({
   query: z.object({
     status: z
-      .enum(["PENDING", "PROCESSED", "FAILED"])
+      .enum(["PENDING", "PROCESSING", "SUCCEEDED", "FAILED"])
       .optional(),
     search: z.string().trim().optional(),
     page: z.coerce.number().int().min(1, "page must be >= 1").default(1),

@@ -34,7 +34,7 @@ const ledgerEntrySchema = new mongoose.Schema(
       type: String,
       required: true,
       uppercase: true,
-      default: "USD",
+      default: "INR",
     },
     description: {
       type: String,
