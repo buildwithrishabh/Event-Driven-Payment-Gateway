@@ -79,10 +79,15 @@ export const refundWorker = new Worker(
         });
       }
     } catch (error) {
-      logger.error(`❌ Refund ${refund._id} failed: ${error?.message || error}`);
+      logger.error(
+        `❌ Refund ${refund._id} failed: ${error?.message || error}`,
+      );
+
+      const maxAttempts = job.opts?.attempts || 5;
+      const isLastAttempt = job.attemptsMade + 1 >= maxAttempts;
 
       // Rollback payment.refundedAmount in DB on terminal failure
-      if (job.attemptsMade >= (job.opts.attempts || 5)) {
+      if (isLastAttempt) {
         refundCounter.inc({ status: "FAILED" });
         refund.status = "FAILED";
         refund.failureReason =
