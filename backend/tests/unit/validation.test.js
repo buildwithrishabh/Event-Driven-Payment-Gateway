@@ -274,6 +274,29 @@ describe("Zod Validation Middleware & Schemas Unit Tests", () => {
         })
       ).rejects.toThrow();
     });
+
+    it("getRefundByIdSchema: should accept both MongoDB ObjectId and upstream processorRefundId", async () => {
+      // 1. Valid 24-char ObjectId
+      await expect(
+        getRefundByIdSchema.parseAsync({
+          params: { id: "507f1f77bcf86cd799439011" },
+        })
+      ).resolves.toBeDefined();
+
+      // 2. Valid Razorpay processor refund ID
+      await expect(
+        getRefundByIdSchema.parseAsync({
+          params: { id: "rfnd_PV1b9Z5Vv6u2Yt" },
+        })
+      ).resolves.toBeDefined();
+
+      // 3. Reject empty string
+      await expect(
+        getRefundByIdSchema.parseAsync({
+          params: { id: "   " },
+        })
+      ).rejects.toThrow();
+    });
   });
 
   describe("Pagination Schema", () => {

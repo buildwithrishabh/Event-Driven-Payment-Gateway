@@ -127,7 +127,11 @@ export const createRefundSchema = z.object({
 
 export const getRefundByIdSchema = z.object({
   params: z.object({
-    id: objectIdSchema,
+    id: z
+      .string({ required_error: "Refund ID is required" })
+      .trim()
+      .min(1, "Refund ID cannot be empty")
+      .max(100, "Refund ID is too long"),
   }),
 });
 

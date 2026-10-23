@@ -2,6 +2,9 @@
 
 [![Node.js](https://img.shields.io/badge/Node.js-v20+-68a063?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![Express](https://img.shields.io/badge/Express-5.x-000000?style=flat-square&logo=express)](https://expressjs.com/)
+[![Vitest Tests](https://img.shields.io/badge/Vitest-55%20Passed-729B1B?style=flat-square&logo=vitest)](https://vitest.dev/)
+[![Zod](https://img.shields.io/badge/Validation-Zod%20v3-3068b7?style=flat-square&logo=zod)](https://zod.dev/)
+[![Security](https://img.shields.io/badge/Security-SSRF%20Protected-brightgreen?style=flat-square)](#-security-validation--resilience-architecture)
 [![MongoDB](https://img.shields.io/badge/MongoDB-Replica_Set-47A248?style=flat-square&logo=mongodb)](https://www.mongodb.com/)
 [![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis)](https://redis.io/)
 [![BullMQ](https://img.shields.io/badge/BullMQ-v6-FF4438?style=flat-square)](https://bullmq.io/)
@@ -9,8 +12,8 @@
 [![Grafana](https://img.shields.io/badge/Grafana-v10.4.1-F46800?style=flat-square&logo=grafana)](https://grafana.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)](https://www.docker.com/)
 
-> **A production-grade, distributed fintech engine that guarantees zero double-charges, zero lost events, mathematically immutable financial balances, and full-stack Prometheus/Grafana observability.**  
-> Built with Node.js (Express 5), MongoDB Replica Sets, Redis, BullMQ, Razorpay SDK, Prometheus, Grafana, and a React 18 Merchant Dashboard.
+> **A production-grade, distributed fintech engine that guarantees zero double-charges, zero lost events, mathematically immutable financial balances, strict SSRF defense, centralized Zod validation, and full-stack Prometheus/Grafana observability.**  
+> Built with Node.js (Express 5), MongoDB Replica Sets, Redis, BullMQ, Razorpay SDK, Prometheus, Grafana, Vitest, and a React 18 Merchant Dashboard.
 
 📚 **Deep-Dive Guides:**
 - 🏛️ [System Architecture & Technical Design](./ARCHITECTURE.md)
@@ -23,23 +26,28 @@
 In typical web apps, handling payments with naive CRUD operations (`merchant.balance += amount` or calling third-party payment APIs directly inside an HTTP route) leads to catastrophic financial failures:
 
 ```
-❌ The 4 Deadly Traps of Naive Payment Systems:
+❌ The Deadly Traps of Naive Payment Systems:
 1. Double Charging: A customer clicks "Pay" twice or a network retry happens → 2 charges created.
 2. The Dual-Write Trap: Database write succeeds, but Redis/Kafka publish fails → payment lost in limbo.
 3. Balance Mutation Bugs: Race conditions during simultaneous transactions corrupt the account balance.
 4. The Ghost Payment: Customer pays, but drops connection before the browser redirects → merchant never knows.
+5. SSRF & Host Exploitation: Malicious webhook URLs targeting internal services (127.0.0.1, 169.254.169.254).
+6. Poison Jobs & Stuck States: Infinite retry loops or payments forever stuck in PROCESSING without timeouts.
 ```
 
 ### 🛡️ How This Engine Solves Them:
 
-| Vulnerability | Production-Grade Solution Used in This Project |
+| Vulnerability / Edge Case | Production-Grade Solution Used in This Project |
 | :--- | :--- |
 | **Duplicate Payments & Retries** | **Two-Tier Distributed Idempotency**: Redis `SET NX` distributed locks + 24-hour response caching. |
 | **Database & Queue Inconsistency** | **Transactional Outbox Pattern**: Entity state and outbox events are committed together in MongoDB; an autonomous relay dispatches to BullMQ. |
 | **Corrupted Account Balances** | **Strictly Append-Only Double-Entry Ledger**: No mutable balance column exists. Balances are derived on-the-fly via MongoDB aggregation pipelines (`Credits - Debits`). Deletes & updates are blocked at the driver level. |
 | **Lost or Dropped Webhooks** | **Self-Healing Reconciliation Sweeper**: Background worker actively queries the upstream processor for orphaned `PROCESSING` payments and settles them automatically. |
 | **Failed Partial Refunds** | **Saga / Compensating Rollbacks**: Pre-reserves refundable amounts, invokes the processor, and automatically restores balance if all retries fail. |
-| **Blind Spots & Silent Worker Failures** | **End-to-End Observability**: Custom Prometheus metrics for queue depths, outbox lag, HTTP latency histograms, and pre-provisioned Grafana monitoring dashboards. |
+| **SSRF / Internal Infrastructure Leaks** | **Zero-Trust SSRF Protection**: Validates outbound webhook URLs and redirect domains against RFC 1918 private subnets, cloud metadata (`169.254.169.254`), loopbacks, and DNS rebinding attacks. |
+| **Malformed Ingress / Type Jailing** | **Centralized Zod Validation Layer**: Strict type coercion, object ID validation, field bounds, and RFC-standard error payloads for body, query, and params. |
+| **Stuck Payments & Poison Worker Retries** | **Terminal Retry Handling & Orphan Sweeper**: Workers permanently fail exhausted jobs (`attemptsMade >= attempts`), release locks, and a dual-phase sweeper clears abandoned initializations. |
+| **Blind Spots & Silent Worker Failures** | **End-to-End Observability & Vitest Suite**: Custom Prometheus metrics for queue depths, outbox lag, HTTP latency histograms, Grafana dashboards, and 55 automated unit tests. |
 
 ---
 
@@ -50,15 +58,18 @@ The following diagram illustrates how an end-to-end payment moves through the ga
 ```mermaid
 flowchart TB
     subgraph Clients["1. Ingress Clients"]
-        Merchant["Merchant API Client\n(x-api-key)"]
+        Merchant["Merchant API Client\n(x-api-key, Idempotency-Key)"]
         Customer["Customer Browser\n(Hosted Checkout)"]
         UpstreamHook["Razorpay Webhooks\n(HMAC Signed)"]
     end
 
     subgraph Gateway["2. Express 5 Gateway Layer"]
+        RawBody["Raw Body Buffer\n(HMAC Preservation)"]
+        ZodVal["Zod Validation Layer\n(params, query, body)"]
         AuthMW["Auth Middleware\n(SHA-256 + Redis Cache)"]
         IdempMW["Distributed Idempotency\n(Redis SET NX)"]
         HTTPHandler["Route Controllers\n(< 50ms Response)"]
+        SSRFValidator["SSRF Guard\n(Webhook & Redirects)"]
         MetricsRoute["Metrics Scrape\n(GET /metrics)"]
     end
 
@@ -69,10 +80,10 @@ flowchart TB
 
     subgraph AsyncWorkers["4. Distributed Worker Pool"]
         OutboxRelay["Outbox Relay\n(Polls every 1.5s)"]
-        PaymentWorker["Payment Worker\n(Order Generation)"]
-        RefundWorker["Refund Worker\n(Processor Calls & Debits)"]
-        ReconWorker["Reconciliation Sweeper\n(Self-Heals Stuck >3m)"]
-        WebhookWorker["Webhook Worker\n(HMAC-SHA256 Merchant Dispatch)"]
+        PaymentWorker["Payment Worker\n(Order Gen + Terminal Retries)"]
+        RefundWorker["Refund Worker\n(Processor + Saga Compensations)"]
+        ReconWorker["Reconciliation Sweeper\n(Dual-Phase: Stuck & Orphaned)"]
+        WebhookWorker["Webhook Worker\n(SSRF Guarded + HMAC Signed)"]
     end
 
     subgraph Processor["5. External Payment Processor"]
@@ -85,14 +96,12 @@ flowchart TB
     end
 
     %% Ingress flows
-    Merchant --> AuthMW
-    AuthMW --> IdempMW
-    IdempMW --> HTTPHandler
+    Merchant --> RawBody --> ZodVal --> AuthMW --> IdempMW --> HTTPHandler
+    Customer -->|Public Session| ZodVal --> HTTPHandler
+    UpstreamHook -->|POST /v1/webhooks/razorpay| RawBody --> HTTPHandler
 
-    Customer -->|Public Session| HTTPHandler
-    UpstreamHook -->|POST /v1/webhooks/razorpay| HTTPHandler
-
-    %% Ingress to Storage
+    %% Ingress to Storage & Security
+    HTTPHandler --> SSRFValidator
     HTTPHandler -->|Write Payment + Outbox| MongoReplica
     HTTPHandler -.->|Lock / Cache| RedisTier
 
@@ -103,19 +112,20 @@ flowchart TB
     %% Worker Execution
     RedisTier -->|Pull Jobs| PaymentWorker
     PaymentWorker -->|Create Order| RazorpayAPI
-    PaymentWorker -->|Update Order ID| MongoReplica
+    PaymentWorker -->|Update Order ID / Terminal FAILED| MongoReplica
 
     RedisTier -->|Pull Jobs| RefundWorker
     RefundWorker -->|Execute Refund| RazorpayAPI
-    RefundWorker -->|Append DEBIT Entry| MongoReplica
+    RefundWorker -->|Append DEBIT / Compensate Rollback| MongoReplica
 
     RedisTier -->|Pull Jobs| WebhookWorker
+    WebhookWorker --> SSRFValidator
     WebhookWorker -->|Send Signed POST| Merchant
 
     %% Reconciliation
-    ReconWorker -->|Find Stuck Payments| MongoReplica
+    ReconWorker -->|Find Stuck & Orphaned| MongoReplica
     ReconWorker -->|Verify Status| RazorpayAPI
-    ReconWorker -->|Append CREDIT Entry| MongoReplica
+    ReconWorker -->|Append CREDIT / Fail Orphan| MongoReplica
 
     %% Observability flows
     HTTPHandler --> MetricsRoute
@@ -215,7 +225,17 @@ npm run dev
 ```
 > Server runs on `http://localhost:3000`. Background outbox relays and reconciliation sweepers start automatically.
 
-#### 3. Start the Merchant Dashboard (Frontend)
+#### 3. Run Automated Unit Test Suite (Vitest)
+```bash
+# Execute all 55 unit tests (Zero-network / mock isolated)
+npm test
+
+# Run tests in live watch mode during development
+npm run test:watch
+```
+> All 55 tests pass in < 1.5 seconds covering SSRF validation, Zod request schemas, append-only ledger math, saga rollback triggers, and distributed idempotency.
+
+#### 4. Start the Merchant Dashboard (Frontend)
 ```bash
 cd ../frontend
 npm install
@@ -225,6 +245,46 @@ cp .env.example .env
 npm run dev
 ```
 > Open `http://localhost:5173` in your browser.
+
+---
+
+## 🛡️ Security, Validation & Resilience Architecture
+
+Modern financial engines face threats not just from external malicious actors, but from poisoned payloads, infrastructure pivoting, and asynchronous worker lockouts. This engine introduces three hardened defense layers:
+
+### 1. Enterprise SSRF Defense (`ssrfValidator.js`)
+Payment gateways must frequently dispatch outbound webhooks to arbitrary URLs supplied by merchants. Naive implementations allow attackers to supply URLs like `http://169.254.169.254/latest/meta-data/` (cloud metadata) or `http://127.0.0.1:6379` (Redis unauthorized command injection).
+
+Our SSRF validator performs deep defense-in-depth:
+- **Private & Loopback Filtering**: Blocks IPv4 loopback (`127.0.0.0/8`), RFC 1918 private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), Link-local / Cloud metadata (`169.254.0.0/16`), and IPv6 equivalents (`::1`, `fc00::/7`, `fe80::/10`).
+- **DNS Resolution Validation**: Resolves domain names via asynchronous DNS before connection, ensuring the resolved target IP is public and non-reserved (preventing DNS rebinding attacks).
+- **Protocol & Credential Whitelisting**: Strictly restricts protocols to `https:` (mandatory in production) and `http:` (local dev only). Rejects embedded credentials in URLs (`https://user:pass@host`).
+- **Integration Points**: Enforced on merchant registration, webhook dispatch worker, payment redirect URLs, and checkout return endpoints.
+
+### 2. Centralized Zod Validation Layer (`validate.middleware.js` & `validations/index.js`)
+All incoming requests pass through deterministic Zod schema validation before touching controllers or business services:
+- **Coercion & Bounds Checking**: Handles string-to-integer conversions, pagination bounds (`limit <= 50`), and minor-unit currency amounts (`amount >= 100` paise).
+- **Flexible ID Resolution**: Validates 24-character hexadecimal MongoDB ObjectIds and transparently supports upstream processor IDs (e.g., Razorpay `rfnd_...` refund identifiers).
+- **RFC-Compliant Structured Errors**: Unifies error formatting across the application:
+  ```json
+  {
+    "error": "VALIDATION_ERROR",
+    "message": "Invalid request parameters",
+    "details": [
+      {
+        "field": "amount",
+        "message": "amount is required, must be a number, and minimum 100 minor units (e.g., 100 paise = 1 INR)"
+      }
+    ]
+  }
+  ```
+
+### 3. Terminal Retry Handling & Dual-Phase Reconciliation Sweeper
+To eliminate "poison jobs" that cause endless worker crash loops and stuck transaction states:
+- **BullMQ Terminal Retry Guards**: Both `payment.worker.js` and `refund.worker.js` track `attemptsMade >= attempts`. When max retries are exhausted, the worker atomically transitions the record to `FAILED`, releases processing locks, triggers compensating balance rollbacks, emits `payment.failed` / `refund.failed` merchant webhooks, and logs audit events.
+- **Dual-Phase Reconciliation Sweeper (`reconciliation.worker.js`)**:
+  - **Phase 1 (Stuck Upstream Check)**: Scans payments in `PROCESSING` status with an assigned `razorpayOrderId` older than 3 minutes. Queries Razorpay's API to detect if the customer completed payment; if captured, settles the payment and writes ledger credit.
+  - **Phase 2 (Orphan Cleanup)**: Scans orphaned payments in `CREATED` or `PROCESSING` without a `razorpayOrderId` older than 10 minutes. Automatically marks them `FAILED`, records timeout reasons, and dispatches terminal webhooks.
 
 ---
 
@@ -352,26 +412,26 @@ Re-check `/v1/ledger/balance`: `availableBalance` will immediately reflect `3000
 
 ## 📡 API Reference Overview
 
-All amounts are integers in **minor units** (e.g. `10000` = ₹100.00).
+All amounts are integers in **minor units** (e.g. `10000` = ₹100.00). Request inputs are strictly validated against Zod schemas.
 
 | Method | Endpoint | Auth | Idempotency | Description |
 | :--- | :--- | :---: | :---: | :--- |
 | `GET` | `/health` | Public | No | Health check & Redis connectivity |
 | `GET` | `/metrics` | Public | No | Prometheus telemetry scrape endpoint |
-| `POST` | `/v1/merchants` | Public | No | Merchant onboarding & API key generation |
+| `POST` | `/v1/merchants` | Public | No | Merchant onboarding & API key generation (SSRF validated) |
 | `GET` | `/v1/merchants/me` | `x-api-key` | No | Fetch authenticated merchant profile |
-| `POST` | `/v1/payments` | `x-api-key` | **Required** | Ingest payment & write outbox event |
-| `GET` | `/v1/payments` | `x-api-key` | No | List payments with filters & pagination |
-| `GET` | `/v1/payments/:id` | `x-api-key` | No | Fetch single payment details |
+| `POST` | `/v1/payments` | `x-api-key` | **Required** | Ingest payment & write outbox event (Zod validated) |
+| `GET` | `/v1/payments` | `x-api-key` | No | List payments with filters & pagination (page, limit) |
+| `GET` | `/v1/payments/:id` | `x-api-key` | No | Fetch single payment details (ObjectId validated) |
 | `POST` | `/v1/payments/verify` | `x-api-key` | No | Verify checkout signature & credit ledger |
-| `GET` | `/v1/checkout/:id` | Public | No | Public sanitized checkout session |
-| `POST` | `/v1/checkout/verify` | Public | No | Customer checkout completion verification |
+| `GET` | `/v1/checkout/:id` | Public | No | Public sanitized checkout session (ObjectId validated) |
+| `POST` | `/v1/checkout/verify` | Public | No | Customer checkout completion & HMAC signature verification |
 | `GET` | `/v1/ledger/balance` | `x-api-key` | No | Dynamic aggregation balance |
 | `GET` | `/v1/ledger/entries` | `x-api-key` | No | Paginated immutable audit entries |
-| `POST` | `/v1/refunds` | `x-api-key` | **Required** | Asynchronous refund initiation |
-| `GET` | `/v1/refunds` | `x-api-key` | No | List merchant refunds |
-| `GET` | `/v1/refunds/:id` | `x-api-key` | No | Fetch refund status |
-| `POST` | `/v1/webhooks/razorpay` | Public | HMAC | Inbound processor webhook handler |
+| `POST` | `/v1/refunds` | `x-api-key` | **Required** | Asynchronous refund initiation (Zod validated) |
+| `GET` | `/v1/refunds` | `x-api-key` | No | List merchant refunds with filters & pagination |
+| `GET` | `/v1/refunds/:id` | `x-api-key` | No | Fetch refund status (Supports ObjectId or Processor ID `rfnd_...`) |
+| `POST` | `/v1/webhooks/razorpay` | Public | HMAC | Inbound processor webhook handler (Raw body preserved) |
 
 > 📖 **For detailed schema payloads, error codes, and headers, see [ARCHITECTURE.md](file:///d:/Backend/Backend%20Projects/Event-Driven%20Payment%20Gateway%20&%20Ledger%20Engine/ARCHITECTURE.md).**
 
@@ -381,13 +441,15 @@ All amounts are integers in **minor units** (e.g. `10000` = ₹100.00).
 
 ```text
 Event-Driven Payment Gateway & Ledger Engine/
-├── ARCHITECTURE.md                  # Detailed distributed systems specification
-├── README.md                        # Quickstart, overview, and API guide
+├── ARCHITECTURE.md                  # Comprehensive distributed architecture specification
+├── OBSERVABILITY_AND_TESTING.md     # In-depth Prometheus/Grafana & Vitest guide
+├── README.md                        # Quickstart, security overview, and API guide
 │
 ├── backend/                         # Express 5 + BullMQ backend service
 │   ├── Dockerfile                   # Production container definition
 │   ├── docker-compose.yml           # Multi-container stack (Mongo RS, Redis, Backend, Prometheus, Grafana)
 │   ├── package.json                 # Dependencies & scripts
+│   ├── vitest.config.js             # Vitest test runner configuration
 │   ├── monitoring/                  # Observability infrastructure provisioning
 │   │   ├── prometheus/
 │   │   │   └── prometheus.yaml      # Scrape targets & intervals (backend:3000)
@@ -399,6 +461,13 @@ Event-Driven Payment Gateway & Ledger Engine/
 │   │               ├── dashboard.yaml  # Dashboards loader configuration
 │   │               └── definitions/
 │   │                   └── payment_engine.json # Pre-built Grafana visual dashboard
+│   ├── tests/                       # Automated Unit & Security Test Suites (55 passing)
+│   │   └── unit/
+│   │       ├── validation.test.js   # Zod request validation & error format tests (19 tests)
+│   │       ├── security.test.js     # SSRF defense & HMAC signature tests (9 tests)
+│   │       ├── middleware.test.js   # Auth caching & idempotency lock tests (14 tests)
+│   │       ├── ledger.test.js       # Append-only ledger math & immutability tests (7 tests)
+│   │       └── refund.test.js       # Saga rollback & refund boundary tests (6 tests)
 │   └── src/
 │       ├── app.js                   # Express server, graceful shutdown, metrics route
 │       ├── config/
@@ -410,8 +479,13 @@ Event-Driven Payment Gateway & Ledger Engine/
 │       ├── middleware/
 │       │   ├── auth.js              # x-api-key verification & Redis cache (TTL 300s)
 │       │   ├── idempotency.js       # Atomic lock (SET NX) & response replay cache
+│       │   ├── validate.middleware.js # Centralized Zod request validator (params/query/body)
 │       │   ├── error.middleware.js  # Express 5 centralized error & 404 handler
 │       │   └── morgan.middleware.js # HTTP request logging
+│       ├── validations/
+│       │   └── index.js             # Centralized Zod schemas for all modules
+│       ├── utils/
+│       │   └── ssrfValidator.js     # Zero-trust SSRF protection (DNS & private IP check)
 │       ├── modules/
 │       │   ├── merchants/           # Merchant registration & profile
 │       │   ├── payments/            # Payment model, outbox model, routes
@@ -423,10 +497,10 @@ Event-Driven Payment Gateway & Ledger Engine/
 │       ├── queues/                  # BullMQ queue declarations (payment, refund, webhook)
 │       └── workers/                 # Asynchronous background workers
 │           ├── outbox.relay.js      # Polling relay: Mongo outbox -> BullMQ queues (tracks lag)
-│           ├── payment.worker.js    # Concurrency 5: Creates Razorpay orders & increments counters
-│           ├── refund.worker.js     # Concurrency 5: Executes refunds & ledger debits
-│           ├── webhook.worker.js    # Concurrency 10: Signs HMAC & posts to merchants
-│           └── reconciliation.worker.js # Sweeper: Heals stuck payments every 60s
+│           ├── payment.worker.js    # Concurrency 5: Creates Razorpay orders & terminal failure guards
+│           ├── refund.worker.js     # Concurrency 5: Executes refunds, ledger debits, & saga rollbacks
+│           ├── webhook.worker.js    # Concurrency 10: SSRF-validated HMAC merchant dispatch
+│           └── reconciliation.worker.js # Sweeper: Dual-phase self-healing every 60s
 │
 └── frontend/                        # Merchant Console & Customer Checkout
     ├── package.json
@@ -485,9 +559,13 @@ VITE_API_BASE_URL=http://localhost:3000
    Storing mutable balances (`balance = balance + 100`) leads to irrecoverable race conditions and destroys historical auditability. By deriving balances from append-only journal entries, the ledger is mathematically incorruptible.
 4. **Why Transactional Outbox instead of direct BullMQ enqueue?**  
    If the HTTP server loses power after writing to MongoDB but before enqueueing to Redis, the job is permanently lost. Writing an `outboxevent` in the database guarantees at-least-once delivery.
-5. **Why Full-Stack Prometheus + Grafana Observability?**  
+5. **Why Zero-Trust SSRF Protection?**  
+   Merchant webhooks and checkout redirects are inherent attack vectors for internal port scans and cloud metadata credential harvesting (`169.254.169.254`). Validating every URL against private CIDRs and DNS resolutions protects internal services.
+6. **Why Centralized Zod Validation?**  
+   Validating route params, queries, and bodies at the middleware boundary prevents invalid data from ever reaching database models or worker queues, providing explicit, typed error messages.
+7. **Why Full-Stack Prometheus + Grafana Observability?**  
    In distributed asynchronous architectures, silent worker stalls and outbox backlogs can go unnoticed without telemetry. Integrating `prom-client` with a provisioned Grafana dashboard provides immediate visual alerts on queue depths, outbox lag, and API latency percentiles.
-6. **Graceful Shutdown & Resilience**:  
+8. **Graceful Shutdown & Resilience**:  
    On receiving `SIGINT` or `SIGTERM`, the gateway closes HTTP listener sockets, terminates recurring polling sweepers, and cleanly terminates Redis and MongoDB connections without dropping in-flight transactions.
 
 ---
@@ -495,4 +573,5 @@ VITE_API_BASE_URL=http://localhost:3000
 ## 📄 License & Contributing
 
 Built for high-scale, fault-tolerant financial engineering. Open for educational, portfolio, and commercial reference. PRs and architecture discussions are welcome!
+
 

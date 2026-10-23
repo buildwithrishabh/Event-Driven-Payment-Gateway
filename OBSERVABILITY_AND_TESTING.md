@@ -103,7 +103,7 @@ Logging pipelines enforce strict separation between human-readable development o
 The test harness is architected around **deterministic, isolated unit execution**:
 1. **Zero Real Network / Database Dependency**: All Redis, MongoDB transactions, and Razorpay API boundaries are virtualized via Vitest spies and mocks, preventing flaky runs caused by network latency or state pollution.
 2. **Strict Mock Isolation**: `clearMocks: true` and `restoreMocks: true` in `vitest.config.js` guarantee zero cross-test state leakage.
-3. **Execution Speed**: Full suite executes 31 critical financial tests in **< 1.2 seconds**.
+3. **Execution Speed**: Full suite executes 55 critical financial and security tests in **< 1.5 seconds**.
 
 ---
 
@@ -111,20 +111,22 @@ The test harness is architected around **deterministic, isolated unit execution*
 
 ```
 backend/tests/unit/
-├── middleware.test.js      # Ingress security, Auth caching, Distributed Idempotency
+├── validation.test.js      # Centralized Zod request schema validation & RFC 7807 error responses
+├── security.test.js        # SSRF defense, link-local/metadata IP filtering, HMAC webhook signatures
+├── middleware.test.js      # Ingress security, Auth caching, Distributed Idempotency locks
 ├── ledger.test.js          # Double-Entry Ledger rules & balance derivation math
-├── refund.test.js          # Refund state machine, over-refund guardrails, saga compensations
-└── security.test.js        # Webhook HMAC SHA-256 signature verification & replay defenses
+└── refund.test.js          # Refund state machine, over-refund guardrails, saga compensations
 ```
 
 #### Detailed Test Coverage Breakdown
 
 | Test Suite | Primary Module | Critical Test Cases & Invariants Tested |
 | :--- | :--- | :--- |
+| **`validation.test.js`** | `validations/index.js`<br>`validate.middleware.js` | • Strict type coercion, object ID regex format verification<br>• Merchant onboarding schema validation (name, email, webhookUrl)<br>• Payment bounds (minor units integer >= 100, 3-letter currency code, customerEmail)<br>• Refund ID polymorphism (MongoDB 24-hex ObjectId & upstream Razorpay `rfnd_...` IDs)<br>• Standardized RFC 7807 `400 Bad Request` formatted field error arrays |
+| **`security.test.js`** | `ssrfValidator.js`<br>`verifyWebhookSignature` | • Zero-trust SSRF blocking against IPv4 loopback (`127.0.0.1`), RFC 1918 private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`)<br>• Link-local / Cloud metadata endpoint blocking (`169.254.169.254`)<br>• Asynchronous DNS resolution check against DNS rebinding attacks<br>• Protocol whitelist enforcement (HTTPS required in production)<br>• Constant-time HMAC SHA-256 signature evaluation (timing-attack prevention)<br>• Preservation of raw payload byte integrity across the Express parsing chain |
 | **`middleware.test.js`** | `authenticateApiKey`<br>`idempotency`<br>`errorHandler` | • Rejection of requests lacking `x-api-key`<br>• Sub-millisecond authorization via Redis SHA-256 cache hits<br>• Fallback to MongoDB on cache miss & subsequent cache hydration<br>• Non-mutating HTTP methods (`GET`, `HEAD`) bypass idempotency checks<br>• Distributed lock acquisition via atomic `SET NX`<br>• `409 Conflict` emission on concurrent in-flight requests<br>• Zero-computation cached replay for `COMPLETED` requests<br>• Transformation of Mongoose validation errors into standard RFC 7807 responses |
 | **`ledger.test.js`** | `ledger.service.js` | • **Mathematical Invariant**: Total Debits strictly equal Total Credits ($\sum D = \sum C$)<br>• Append-only ledger updates: Inability to overwrite or delete recorded entries<br>• On-the-fly balance computation via MongoDB aggregation pipelines<br>• Ledger lock validation preventing balance mutation during open cycles |
 | **`refund.test.js`** | `refund.service.js` | • Full refund balance exhaustion validation<br>• Cumulative partial refund boundaries (cannot exceed original capture amount)<br>• State transition verification (`PENDING` ➔ `PROCESSING` ➔ `SUCCEEDED` / `FAILED`)<br>• Compensating rollback execution upon upstream processor decline |
-| **`security.test.js`** | `verifyWebhookSignature` | • Constant-time HMAC SHA-256 signature evaluation (timing-attack prevention)<br>• Rejection of tampered payloads and forged authorization headers<br>• Preservation of raw payload byte integrity across the Express parsing chain |
 
 ---
 
@@ -158,7 +160,7 @@ npm run test:coverage
 | **2** | Telemetry Ingress | `curl -s http://localhost:3000/metrics \| grep payment_gw` | Returns active Prometheus metric descriptors |
 | **3** | Prometheus Scraping | `http://localhost:9090/targets` | Target `payment-backend` shows state **UP (1/1)** |
 | **4** | Grafana Dashboards | `http://localhost:3001` (Auth: `admin`/`admin`) | Dashboard "Payment Gateway Engine" renders live metrics |
-| **5** | Test Suite Integrity | `npm test` | **31 / 31 tests passing** |
+| **5** | Test Suite Integrity | `npm test` | **55 / 55 tests passing** |
 
 ---
 
