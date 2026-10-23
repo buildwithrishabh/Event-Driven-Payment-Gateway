@@ -14,6 +14,17 @@ export function errorHandler(err, req, res, next) {
     method: req.method,
   });
 
+  if (err.name === "ZodError" || (err.issues && Array.isArray(err.issues))) {
+    return res.status(400).json({
+      error: "Validation Error",
+      message: err.issues[0]?.message || "Invalid request data",
+      details: err.issues.map((i) => ({
+        field: i.path.length > 1 ? i.path.slice(1).join(".") : i.path.join("."),
+        message: i.message,
+      })),
+    });
+  }
+
   if (err.name === "ValidationError") {
     return res.status(400).json({
       error: "Validation Error",

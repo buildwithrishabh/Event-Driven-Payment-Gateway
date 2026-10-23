@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { getBalance, getLedgerEntries } from "./ledger.service.js";
 import { authenticateApiKey } from "../../middleware/auth.js";
+import { validate } from "../../middleware/validate.middleware.js";
+import { listLedgerEntriesQuerySchema } from "../../validations/index.js";
 import { logger } from "../../config/logger.js";
 
 const router = Router();
@@ -22,7 +24,7 @@ router.get("/balance", authenticateApiKey, async (req, res) => {
   }
 });
 
-router.get("/entries", authenticateApiKey, async (req, res) => {
+router.get("/entries", authenticateApiKey, validate(listLedgerEntriesQuerySchema), async (req, res) => {
   try {
     const result = await getLedgerEntries(req.merchant._id, req.query);
     return res.json(result);
