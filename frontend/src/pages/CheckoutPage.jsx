@@ -44,7 +44,7 @@ import CopyButton from "../components/ui/CopyButton.jsx";
 function BrandMark() {
   return (
     <span
-      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-600 text-white shadow-glow-sm"
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-indigo-600 text-white"
       aria-hidden="true"
     >
       <svg
@@ -116,9 +116,6 @@ export default function CheckoutPage() {
     }, 3500);
     return () => clearInterval(interval);
   }, [id, payment?.status]);
-
-
-
 
   // Real Razorpay Standard Checkout (Official Modal)
   const handleRealRazorpayPayment = async () => {
@@ -237,8 +234,8 @@ export default function CheckoutPage() {
   // Loading Screen
   if (loading && !payment) {
     return (
-      <div className="min-h-screen bg-[#f7f8fa] grid place-items-center p-4">
-        <Card className="w-full max-w-md p-8 text-center shadow-card border-ink-200">
+      <div className="min-h-screen bg-[#0C0D0E] grid place-items-center p-4">
+        <Card className="w-full max-w-md p-8 text-center shadow-card border-[#232529] bg-[#16171A]">
           <LoadingBlock label="Initializing secure checkout session…" />
         </Card>
       </div>
@@ -248,15 +245,15 @@ export default function CheckoutPage() {
   // Error / Not Found Screen
   if (error && !payment) {
     return (
-      <div className="min-h-screen bg-[#f7f8fa] text-ink-900 flex flex-col justify-center items-center p-4">
-        <Card className="w-full max-w-lg p-8 shadow-card border-ink-200 text-center">
-          <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-rose-50 text-rose-600 border border-rose-200/80">
+      <div className="min-h-screen bg-[#0C0D0E] text-[#D4D4D8] flex flex-col justify-center items-center p-4">
+        <Card className="w-full max-w-lg p-8 shadow-card border-[#232529] bg-[#16171A] text-center">
+          <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
             <XCircle className="h-7 w-7" />
           </div>
-          <h2 className="text-xl font-bold tracking-tight text-ink-900">
+          <h2 className="text-xl font-bold tracking-tight text-[#F4F4F5]">
             Checkout Session Unavailable
           </h2>
-          <p className="mt-2 text-sm text-ink-500 leading-relaxed">
+          <p className="mt-2 text-sm text-zinc-400 leading-relaxed">
             {error}
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
@@ -265,7 +262,7 @@ export default function CheckoutPage() {
             </Button>
             <Link
               to="/payments"
-              className="inline-flex h-9 items-center rounded-xl bg-brand-600 px-4 text-xs font-semibold text-white shadow-sm hover:bg-brand-700"
+              className="inline-flex h-9 items-center rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 transition-colors"
             >
               Back to Merchant Console
             </Link>
@@ -276,37 +273,37 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f8fa] text-ink-800 flex flex-col font-sans selection:bg-brand-500/20 selection:text-brand-900">
+    <div className="min-h-screen bg-[#0C0D0E] text-[#D4D4D8] flex flex-col font-sans selection:bg-indigo-500/20 selection:text-indigo-300">
       {/* Top Navbar */}
-      <header className="border-b border-ink-200/90 bg-white/90 backdrop-blur-md sticky top-0 z-30 print:hidden">
+      <header className="border-b border-[#232529] bg-[#0C0D0E]/90 backdrop-blur-md sticky top-0 z-30 print:hidden">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <BrandMark />
             <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-ink-900 tracking-tight">
+              <span className="font-bold text-sm text-[#F4F4F5] tracking-tight">
                 ClearLedger
               </span>
-              <span className="hidden sm:inline-block text-ink-300">/</span>
+              <span className="hidden sm:inline-block text-zinc-600">/</span>
               <div className="flex items-center gap-1.5">
-                <Store className="h-3.5 w-3.5 text-ink-400" />
-                <span className="font-medium text-xs text-ink-700">
+                <Store className="h-3.5 w-3.5 text-zinc-400" />
+                <span className="font-medium text-xs text-zinc-300">
                   {merchantName}
                 </span>
-                <span className="inline-flex items-center gap-0.5 text-[10px] bg-emerald-50 text-emerald-700 font-medium px-1.5 py-0.5 rounded-full border border-emerald-200/70">
-                  <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600" /> Verified
+                <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/10 text-emerald-400 font-medium px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" /> Verified
                 </span>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2.5">
-            <div className="hidden sm:flex items-center gap-1.5 text-xs text-emerald-700 font-medium bg-emerald-50 border border-emerald-200/70 px-2.5 py-1 rounded-full">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-emerald-400 font-medium bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
               256-bit TLS Encrypted
             </div>
             <Link
               to="/"
-              className="inline-flex items-center gap-1 text-xs font-medium text-ink-600 hover:text-ink-900 transition-colors bg-ink-50 hover:bg-ink-100 border border-ink-200/80 px-2.5 py-1 rounded-lg"
+              className="inline-flex items-center gap-1 text-xs font-medium text-zinc-300 hover:text-white transition-colors bg-[#16171A] hover:bg-[#1E2024] border border-[#26282E] px-2.5 py-1 rounded-lg"
             >
               Merchant Console
               <ChevronRight className="h-3 w-3" />
@@ -318,9 +315,9 @@ export default function CheckoutPage() {
       {/* Main Checkout Container */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col justify-center">
         {/* Test Mode Banner */}
-        <div className="mb-6 rounded-xl border border-amber-200/80 bg-amber-50/80 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-900 print:hidden">
+        <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-200 print:hidden">
           <div className="flex items-center gap-2">
-            <span className="inline-block px-1.5 py-0.5 rounded bg-amber-200/60 text-[10px] font-bold uppercase tracking-wider text-amber-800 border border-amber-300">
+            <span className="inline-block px-1.5 py-0.5 rounded bg-amber-500/10 text-[10px] font-bold uppercase tracking-wider text-amber-300 border border-amber-500/20">
               Test Mode
             </span>
             <span>
@@ -329,7 +326,7 @@ export default function CheckoutPage() {
           </div>
           <button
             onClick={() => fetchSession(true)}
-            className="flex items-center gap-1 font-semibold text-amber-800 hover:text-amber-950 transition-colors"
+            className="flex items-center gap-1 font-semibold text-amber-300 hover:text-amber-100 transition-colors"
             title="Refresh status"
           >
             <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
@@ -344,7 +341,7 @@ export default function CheckoutPage() {
               {/* Merchant Title & Amount Due */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold text-ink-400 uppercase tracking-wider">
+                  <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
                     Total Due
                   </span>
                   <Badge tone={status.label === "Succeeded" ? "success" : status.label === "Failed" ? "danger" : "neutral"} dot>
@@ -352,64 +349,64 @@ export default function CheckoutPage() {
                   </Badge>
                 </div>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-3xl sm:text-4xl font-extrabold text-ink-950 tracking-tight">
+                  <span className="text-3xl sm:text-4xl font-extrabold text-[#F4F4F5] tracking-tight">
                     {formatMoney(payment.amount, payment.currency)}
                   </span>
-                  <span className="text-xs font-bold text-ink-400 uppercase bg-ink-100 px-2 py-0.5 rounded">
+                  <span className="text-xs font-bold text-zinc-300 uppercase bg-[#111215] border border-[#26282E] px-2 py-0.5 rounded">
                     {payment.currency || "INR"}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-ink-500">
-                  Pay to <strong className="text-ink-700">{merchantName}</strong>
+                <p className="mt-1 text-xs text-zinc-400">
+                  Pay to <strong className="text-zinc-200">{merchantName}</strong>
                 </p>
               </div>
 
               {/* Order breakdown */}
-              <div className="rounded-xl border border-ink-100 bg-ink-50/70 p-4 space-y-2.5 text-xs">
-                <div className="flex justify-between text-ink-600">
+              <div className="rounded-xl border border-[#232529] bg-[#111215] p-4 space-y-2.5 text-xs">
+                <div className="flex justify-between text-zinc-400">
                   <span>Subtotal</span>
-                  <span className="text-ink-900 font-medium">
+                  <span className="text-zinc-200 font-medium">
                     {formatMoney(payment.amount, payment.currency)}
                   </span>
                 </div>
-                <div className="flex justify-between text-ink-600">
+                <div className="flex justify-between text-zinc-400">
                   <span>Gateway & Processing Fee</span>
-                  <span className="text-emerald-700 font-medium">₹0.00 (Waived)</span>
+                  <span className="text-emerald-400 font-medium">₹0.00 (Waived)</span>
                 </div>
-                <div className="pt-2 border-t border-ink-200/80 flex justify-between font-bold text-ink-900 text-sm">
+                <div className="pt-2 border-t border-[#1E2024] flex justify-between font-bold text-[#F4F4F5] text-sm">
                   <span>Total Amount</span>
-                  <span className="text-brand-700">
+                  <span className="text-indigo-400 font-bold">
                     {formatMoney(payment.amount, payment.currency)}
                   </span>
                 </div>
               </div>
 
               {/* Customer & Transaction details */}
-              <div className="space-y-3 text-xs border-t border-ink-100 pt-5">
+              <div className="space-y-3 text-xs border-t border-[#1E2024] pt-5">
                 {payment.customerName && (
-                  <div className="flex justify-between items-center text-ink-500">
+                  <div className="flex justify-between items-center text-zinc-400">
                     <span>Customer</span>
-                    <span className="text-ink-800 font-medium truncate max-w-[200px]" title={payment.customerName}>
+                    <span className="text-zinc-200 font-medium truncate max-w-[200px]" title={payment.customerName}>
                       {payment.customerName}
                     </span>
                   </div>
                 )}
 
-                <div className="flex justify-between items-center text-ink-500">
+                <div className="flex justify-between items-center text-zinc-400">
                   <span>Customer Email</span>
-                  <span className="text-ink-800 font-medium truncate max-w-[200px]" title={payment.customerEmail}>
+                  <span className="text-zinc-200 font-medium truncate max-w-[200px]" title={payment.customerEmail}>
                     {payment.customerEmail || "customer@example.com"}
                   </span>
                 </div>
 
                 {payment.customerPhone && (
-                  <div className="flex justify-between items-center text-ink-500">
+                  <div className="flex justify-between items-center text-zinc-400">
                     <span>Phone</span>
-                    <span className="text-ink-800 font-medium">{payment.customerPhone}</span>
+                    <span className="text-zinc-200 font-medium">{payment.customerPhone}</span>
                   </div>
                 )}
 
-                <div className="flex justify-between items-center text-ink-500">
+                <div className="flex justify-between items-center text-zinc-400">
                   <span>Payment ID</span>
                   <CopyButton
                     value={paymentId}
@@ -420,9 +417,9 @@ export default function CheckoutPage() {
                 </div>
 
                 {payment.razorpayOrderId && (
-                  <div className="flex justify-between items-center text-ink-500">
+                  <div className="flex justify-between items-center text-zinc-400">
                     <span>Razorpay Order</span>
-                    <span className="font-mono text-[11px] text-ink-700 bg-ink-100 px-1.5 py-0.5 rounded">
+                    <span className="font-mono text-[11px] text-zinc-300 bg-[#111215] border border-[#26282E] px-1.5 py-0.5 rounded">
                       {payment.razorpayOrderId}
                     </span>
                   </div>
@@ -430,18 +427,18 @@ export default function CheckoutPage() {
               </div>
 
               {/* Ledger Security Badges */}
-              <div className="pt-3 border-t border-ink-100 grid grid-cols-3 gap-2 text-center text-[10px] text-ink-500">
-                <div className="flex flex-col items-center gap-1 p-1.5 rounded-lg bg-ink-50/50">
-                  <Lock className="h-3.5 w-3.5 text-brand-600" />
-                  <span className="font-medium text-ink-700">TLS 1.3</span>
+              <div className="pt-3 border-t border-[#1E2024] grid grid-cols-3 gap-2 text-center text-[10px] text-zinc-400">
+                <div className="flex flex-col items-center gap-1 p-2 rounded-xl bg-[#111215] border border-[#232529]">
+                  <Lock className="h-3.5 w-3.5 text-indigo-400" />
+                  <span className="font-medium text-zinc-300">TLS 1.3</span>
                 </div>
-                <div className="flex flex-col items-center gap-1 p-1.5 rounded-lg bg-ink-50/50">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                  <span className="font-medium text-ink-700">Double-Entry</span>
+                <div className="flex flex-col items-center gap-1 p-2 rounded-xl bg-[#111215] border border-[#232529]">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                  <span className="font-medium text-zinc-300">Double-Entry</span>
                 </div>
-                <div className="flex flex-col items-center gap-1 p-1.5 rounded-lg bg-ink-50/50">
-                  <Sparkles className="h-3.5 w-3.5 text-accent-600" />
-                  <span className="font-medium text-ink-700">Idempotent</span>
+                <div className="flex flex-col items-center gap-1 p-2 rounded-xl bg-[#111215] border border-[#232529]">
+                  <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                  <span className="font-medium text-zinc-300">Idempotent</span>
                 </div>
               </div>
             </Card>
@@ -451,57 +448,57 @@ export default function CheckoutPage() {
           <div className="lg:col-span-7">
             {/* SUCCESS STATE */}
             {payment.status === "SUCCEEDED" ? (
-              <Card className="p-8 text-center space-y-6 border-emerald-200 bg-gradient-to-b from-emerald-50/30 via-white to-white shadow-card">
-                <div className="relative mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-100 text-emerald-600 border border-emerald-200 shadow-glow-sm">
-                  <CheckCircle2 className="h-9 w-9 text-emerald-600" />
+              <Card className="p-8 text-center space-y-6 border-emerald-500/20 bg-[#16171A] shadow-card">
+                <div className="relative mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <CheckCircle2 className="h-9 w-9 text-emerald-400" />
                 </div>
 
                 <div>
                   <Badge tone="success" className="mb-2">
                     Payment Verified & Settled
                   </Badge>
-                  <h2 className="text-2xl font-bold tracking-tight text-ink-950">
+                  <h2 className="text-2xl font-bold tracking-tight text-[#F4F4F5]">
                     Payment Successful!
                   </h2>
-                  <p className="mt-1 text-sm text-ink-500">
+                  <p className="mt-1 text-sm text-zinc-400">
                     Your transaction has been processed and credited to the merchant ledger.
                   </p>
                 </div>
 
                 {/* Receipt Card */}
-                <div className="rounded-xl border border-ink-200/90 bg-ink-50/50 p-5 text-left text-xs space-y-3">
-                  <div className="flex justify-between items-center border-b border-ink-200/80 pb-3">
-                    <span className="text-ink-500 font-medium">Amount Paid</span>
-                    <span className="text-ink-950 font-bold text-lg">
+                <div className="rounded-xl border border-[#232529] bg-[#111215] p-5 text-left text-xs space-y-3">
+                  <div className="flex justify-between items-center border-b border-[#1E2024] pb-3">
+                    <span className="text-zinc-400 font-medium">Amount Paid</span>
+                    <span className="text-[#F4F4F5] font-bold text-lg">
                       {formatMoney(payment.amount, payment.currency)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-ink-500">Payment Reference</span>
-                    <span className="font-mono text-ink-800 font-medium">{paymentId}</span>
+                    <span className="text-zinc-400">Payment Reference</span>
+                    <span className="font-mono text-zinc-200 font-medium">{paymentId}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-ink-500">Payment Method</span>
-                    <span className="text-ink-800 font-medium">
+                    <span className="text-zinc-400">Payment Method</span>
+                    <span className="text-zinc-200 font-medium">
                       {payment.methodUsed || "Instant Gateway Capture"}
                     </span>
                   </div>
                   {payment.razorpayPaymentId && (
                     <div className="flex justify-between items-center">
-                      <span className="text-ink-500">Processor Reference</span>
-                      <span className="font-mono text-ink-800">{payment.razorpayPaymentId}</span>
+                      <span className="text-zinc-400">Processor Reference</span>
+                      <span className="font-mono text-zinc-200">{payment.razorpayPaymentId}</span>
                     </div>
                   )}
                   <div className="flex justify-between items-center">
-                    <span className="text-ink-500">Timestamp</span>
-                    <span className="text-ink-700">
+                    <span className="text-zinc-400">Timestamp</span>
+                    <span className="text-zinc-300">
                       {formatDateTime(payment.updatedAt || new Date().toISOString())}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-ink-200/80 text-[11px]">
-                    <span className="text-ink-500">Ledger Status</span>
-                    <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                      <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Double-entry journal credited
+                  <div className="flex justify-between items-center pt-2 border-t border-[#1E2024] text-[11px]">
+                    <span className="text-zinc-400">Ledger Status</span>
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" /> Double-entry journal credited
                     </span>
                   </div>
                 </div>
@@ -515,7 +512,7 @@ export default function CheckoutPage() {
                   </Button>
                   <Link
                     to={`/payments/${paymentId}`}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-600 px-4 text-xs font-semibold text-white shadow-sm hover:bg-brand-700"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 transition-colors"
                   >
                     View in Merchant Console
                     <ArrowRight className="h-3.5 w-3.5" />
@@ -524,19 +521,19 @@ export default function CheckoutPage() {
               </Card>
             ) : payment.status === "FAILED" ? (
               /* FAILED STATE */
-              <Card className="p-8 text-center space-y-6 border-rose-200 bg-gradient-to-b from-rose-50/30 via-white to-white shadow-card">
-                <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-rose-100 text-rose-600 border border-rose-200">
-                  <XCircle className="h-9 w-9 text-rose-600" />
+              <Card className="p-8 text-center space-y-6 border-rose-500/20 bg-[#16171A] shadow-card">
+                <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                  <XCircle className="h-9 w-9 text-rose-400" />
                 </div>
 
                 <div>
                   <Badge tone="danger" className="mb-2">
                     Payment Failed
                   </Badge>
-                  <h2 className="text-2xl font-bold tracking-tight text-ink-950">
+                  <h2 className="text-2xl font-bold tracking-tight text-[#F4F4F5]">
                     Transaction Declined
                   </h2>
-                  <p className="mt-1 text-sm text-ink-500">
+                  <p className="mt-1 text-sm text-zinc-400">
                     {payment.failureReason || "The issuing bank or processor declined this transaction."}
                   </p>
                 </div>
@@ -550,7 +547,7 @@ export default function CheckoutPage() {
                   </Button>
                   <Link
                     to="/payments"
-                    className="inline-flex h-9 items-center rounded-xl border border-ink-200 bg-white px-4 text-xs font-semibold text-ink-700 hover:bg-ink-50"
+                    className="inline-flex h-9 items-center rounded-lg border border-[#26282E] bg-[#16171A] px-4 text-xs font-semibold text-zinc-300 hover:bg-[#1E2024] hover:text-white transition-colors"
                   >
                     Cancel & Return
                   </Link>
@@ -560,68 +557,65 @@ export default function CheckoutPage() {
               /* PAYMENT CONTAINER (CREATED / PROCESSING) */
               <Card className="overflow-hidden shadow-card">
                 {/* Gateway Card Header */}
-                <div className="border-b border-ink-200/80 bg-ink-50/70 px-5 py-3.5 flex items-center justify-between">
+                <div className="border-b border-[#232529] bg-[#111215] px-5 py-3.5 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-brand-600" />
-                    <span className="font-bold text-xs text-ink-900 tracking-tight">
+                    <ShieldCheck className="h-4 w-4 text-indigo-400" />
+                    <span className="font-bold text-xs text-zinc-200 tracking-tight">
                       Razorpay Checkout
                     </span>
-                    <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">
                       Live Gateway
                     </span>
                   </div>
-                  <span className="text-[11px] text-ink-500 font-medium">
+                  <span className="text-[11px] text-zinc-400 font-medium">
                     256-bit TLS Encrypted
                   </span>
                 </div>
 
                 <div className="p-6">
                   {submitError && (
-                    <div className="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 flex items-start gap-2.5">
-                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
+                    <div className="mb-5 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3.5 text-xs text-rose-300 flex items-start gap-2.5">
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-400" />
                       <div>
-                        <p className="font-semibold">Payment failed</p>
-                        <p className="mt-0.5 text-rose-700">{submitError}</p>
+                        <p className="font-semibold text-rose-200">Payment failed</p>
+                        <p className="mt-0.5 text-rose-300/90">{submitError}</p>
                       </div>
                     </div>
                   )}
 
                   <div className="space-y-5 animate-fade-in">
                     {/* Hero Banner */}
-                    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-900 via-brand-800 to-indigo-900 p-6 text-white shadow-glow-sm">
-                      <div className="pointer-events-none absolute -right-12 -bottom-12 h-44 w-44 rounded-full bg-brand-500/20 blur-2xl" />
-                      <div className="pointer-events-none absolute -left-10 -top-10 h-36 w-36 rounded-full bg-indigo-400/20 blur-xl" />
-
+                    <div className="relative overflow-hidden rounded-2xl bg-[#111215] border border-[#232529] p-6 text-white shadow-card">
                       <div className="relative z-10 space-y-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300 border border-emerald-400/30">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400 border border-emerald-500/20">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                               Live Gateway Mode
                             </span>
-                            <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/80">
+                            <span className="rounded-full bg-white/5 border border-white/10 px-2.5 py-0.5 text-[11px] font-medium text-zinc-300">
                               Sandbox / Test
                             </span>
                           </div>
-                          <span className="font-mono text-xs text-white/60">
+                          <span className="font-mono text-xs text-zinc-400">
                             v1 Standard Checkout
                           </span>
                         </div>
 
                         <div>
-                          <h3 className="text-xl font-bold tracking-tight text-white">
+                          <h3 className="text-xl font-bold tracking-tight text-[#F4F4F5]">
                             Razorpay Standard Checkout
                           </h3>
-                          <p className="mt-1 text-xs text-white/70 leading-relaxed max-w-lg">
+                          <p className="mt-1 text-xs text-zinc-400 leading-relaxed max-w-lg">
                             Complete real test payment using Razorpay's official checkout modal. Supports UPI (Google Pay, PhonePe, Paytm), Debit & Credit Cards, NetBanking, and Wallets.
                           </p>
                         </div>
 
                         {/* Order readiness status */}
-                        <div className="rounded-xl bg-black/25 border border-white/10 p-3 flex items-center justify-between text-xs">
-                          <span className="text-white/70">Razorpay Order ID:</span>
+                        <div className="rounded-xl bg-[#0C0D0E] border border-[#232529] p-3 flex items-center justify-between text-xs">
+                          <span className="text-zinc-400">Razorpay Order ID:</span>
                           {payment.razorpayOrderId ? (
-                            <span className="font-mono font-bold text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/40">
+                            <span className="font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
                               {payment.razorpayOrderId}
                             </span>
                           ) : (
@@ -636,32 +630,32 @@ export default function CheckoutPage() {
 
                     {/* Payment Methods supported showcase */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center text-xs">
-                      <div className="p-3 rounded-xl border border-ink-200/80 bg-ink-50/50 flex flex-col items-center gap-1">
-                        <QrCode className="h-4 w-4 text-brand-600" />
-                        <span className="font-semibold text-ink-900">UPI & QR</span>
-                        <span className="text-[10px] text-ink-400">GPay, PhonePe, Paytm</span>
+                      <div className="p-3 rounded-xl border border-[#232529] bg-[#111215] flex flex-col items-center gap-1">
+                        <QrCode className="h-4 w-4 text-indigo-400" />
+                        <span className="font-semibold text-zinc-200">UPI & QR</span>
+                        <span className="text-[10px] text-zinc-500">GPay, PhonePe, Paytm</span>
                       </div>
-                      <div className="p-3 rounded-xl border border-ink-200/80 bg-ink-50/50 flex flex-col items-center gap-1">
-                        <CreditCard className="h-4 w-4 text-brand-600" />
-                        <span className="font-semibold text-ink-900">All Cards</span>
-                        <span className="text-[10px] text-ink-400">Visa, RuPay, MC</span>
+                      <div className="p-3 rounded-xl border border-[#232529] bg-[#111215] flex flex-col items-center gap-1">
+                        <CreditCard className="h-4 w-4 text-indigo-400" />
+                        <span className="font-semibold text-zinc-200">All Cards</span>
+                        <span className="text-[10px] text-zinc-500">Visa, RuPay, MC</span>
                       </div>
-                      <div className="p-3 rounded-xl border border-ink-200/80 bg-ink-50/50 flex flex-col items-center gap-1">
-                        <Building2 className="h-4 w-4 text-brand-600" />
-                        <span className="font-semibold text-ink-900">NetBanking</span>
-                        <span className="text-[10px] text-ink-400">50+ Banks</span>
+                      <div className="p-3 rounded-xl border border-[#232529] bg-[#111215] flex flex-col items-center gap-1">
+                        <Building2 className="h-4 w-4 text-indigo-400" />
+                        <span className="font-semibold text-zinc-200">NetBanking</span>
+                        <span className="text-[10px] text-zinc-500">50+ Banks</span>
                       </div>
-                      <div className="p-3 rounded-xl border border-ink-200/80 bg-ink-50/50 flex flex-col items-center gap-1">
-                        <Sparkles className="h-4 w-4 text-brand-600" />
-                        <span className="font-semibold text-ink-900">Wallets</span>
-                        <span className="text-[10px] text-ink-400">Mobikwik & more</span>
+                      <div className="p-3 rounded-xl border border-[#232529] bg-[#111215] flex flex-col items-center gap-1">
+                        <Sparkles className="h-4 w-4 text-indigo-400" />
+                        <span className="font-semibold text-zinc-200">Wallets</span>
+                        <span className="text-[10px] text-zinc-500">Mobikwik & more</span>
                       </div>
                     </div>
 
                     {/* Main Action Button */}
                     <Button
                       size="lg"
-                      className="w-full shadow-glow-md py-3.5 text-sm font-bold flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white"
+                      className="w-full py-3.5 text-sm font-bold flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg shadow-xs transition-colors"
                       loading={submitting}
                       disabled={!payment.razorpayOrderId}
                       onClick={handleRealRazorpayPayment}
@@ -673,17 +667,17 @@ export default function CheckoutPage() {
                     </Button>
 
                     {/* Test Sandbox Credentials Helper */}
-                    <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 text-xs text-amber-950 space-y-2">
-                      <div className="flex items-center gap-1.5 font-bold text-amber-900">
-                        <Info className="h-4 w-4 text-amber-700 shrink-0" />
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-amber-200/90 space-y-2">
+                      <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                        <Info className="h-4 w-4 text-amber-400 shrink-0" />
                         <span>How to test with Razorpay Sandbox:</span>
                       </div>
-                      <ul className="space-y-1 text-amber-900/90 pl-5 list-disc text-[11px] leading-relaxed">
+                      <ul className="space-y-1.5 text-amber-200/90 pl-5 list-disc text-[11px] leading-relaxed">
                         <li>
-                          <strong>UPI Mode:</strong> Select UPI inside popup and enter <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold text-amber-950">success@razorpay</code> for instant test approval.
+                          <strong>UPI Mode:</strong> Select UPI inside popup and enter <code className="bg-amber-500/10 text-amber-300 px-1 py-0.5 rounded font-mono font-bold border border-amber-500/20">success@razorpay</code> for instant test approval.
                         </li>
                         <li>
-                          <strong>Card Mode:</strong> Use Card <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold text-amber-950">4111 1111 1111 1111</code>, any future expiry date, CVV <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold text-amber-950">123</code>, and any OTP.
+                          <strong>Card Mode:</strong> Use Card <code className="bg-amber-500/10 text-amber-300 px-1 py-0.5 rounded font-mono font-bold border border-amber-500/20">4111 1111 1111 1111</code>, any future expiry date, CVV <code className="bg-amber-500/10 text-amber-300 px-1 py-0.5 rounded font-mono font-bold border border-amber-500/20">123</code>, and any OTP.
                         </li>
                         <li>
                           <strong>Ledger Verification:</strong> Upon successful capture, the HMAC SHA-256 signature is verified by your backend and automatically credited to the double-entry ledger.
@@ -699,13 +693,13 @@ export default function CheckoutPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-ink-200/80 bg-white py-6 mt-12 text-center text-xs text-ink-500 print:hidden">
+      <footer className="border-t border-[#232529] bg-[#0C0D0E] py-6 mt-12 text-center text-xs text-zinc-400 print:hidden">
         <div className="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-emerald-600" />
-            <span className="font-medium text-ink-700">Secured by ClearLedger Gateway</span>
+            <ShieldCheck className="h-4 w-4 text-emerald-400" />
+            <span className="font-medium text-zinc-300">Secured by ClearLedger Gateway</span>
           </div>
-          <p className="text-[11px]">
+          <p className="text-[11px] text-zinc-500">
             Double-Entry Ledger Verified · Idempotent Settlement · TLS 1.3
           </p>
         </div>

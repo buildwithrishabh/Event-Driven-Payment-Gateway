@@ -121,15 +121,15 @@ export default function PaymentsPage() {
       />
 
       {receipt && (
-        <Card className="border-emerald-200 bg-emerald-50/40">
+        <Card className="border border-emerald-500/20 bg-emerald-500/10">
           <CardBody className="flex flex-wrap items-center justify-between gap-3 p-4">
             <div className="flex items-center gap-3">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
               <div>
-                <p className="text-sm font-semibold text-emerald-950">
+                <p className="text-sm font-semibold text-[#F4F4F5]">
                   {receipt.replay ? "Existing payment returned (Idempotent)" : "Payment successfully created"}
                 </p>
-                <p className="mt-0.5 text-xs text-emerald-800">
+                <p className="mt-0.5 text-xs text-emerald-300">
                   {formatMoney(receipt.payment.amount, receipt.payment.currency)} ·{" "}
                   {statusStyle(PAYMENT_STATUS_STYLES, receipt.payment.status).label}
                 </p>
@@ -140,13 +140,13 @@ export default function PaymentsPage() {
                 to={`/checkout/${receipt.payment.paymentId}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 transition-colors"
+                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 transition-colors"
               >
                 <ExternalLink className="h-3.5 w-3.5" /> Open Checkout UI
               </Link>
               <Link
                 to={`/payments/${receipt.payment.paymentId}`}
-                className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 shadow-2xs hover:bg-brand-50"
+                className="rounded-lg border border-[#282A30] bg-[#16171A] px-3 py-1.5 text-xs font-medium text-[#D4D4D8] hover:bg-[#1C1D21] transition-colors"
               >
                 View details
               </Link>
@@ -185,7 +185,7 @@ export default function PaymentsPage() {
                 onChange={update("currency")}
               >
                 {CURRENCIES.map((currency) => (
-                  <option key={currency} value={currency}>
+                  <option key={currency} value={currency} className="bg-[#111215] text-[#F4F4F5]">
                     {currency}
                   </option>
                 ))}
@@ -218,17 +218,17 @@ export default function PaymentsPage() {
             </div>
 
             {/* Advanced Idempotency Protection */}
-            <details className="group rounded-xl border border-ink-200/80 bg-ink-50/50 p-3.5 transition-colors">
-              <summary className="flex cursor-pointer items-center justify-between text-xs font-semibold text-ink-700 select-none">
+            <details className="group rounded-lg border border-[#232529] bg-[#111215] p-3.5 transition-colors">
+              <summary className="flex cursor-pointer items-center justify-between text-xs font-medium text-[#D4D4D8] select-none">
                 <span>Advanced · Idempotency protection</span>
-                <span className="text-ink-400 transition group-open:rotate-180">▾</span>
+                <span className="text-[#71717A] transition group-open:rotate-180">▾</span>
               </summary>
-              <div className="mt-3 space-y-2 text-xs text-ink-500">
+              <div className="mt-3 space-y-2 text-xs text-[#8E8E93]">
                 <p>
                   Protects against accidental double-charges if the client loses network connectivity.
                 </p>
                 <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <code className="min-w-0 flex-1 break-all rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 font-mono text-[11px] text-ink-800">
+                  <code className="min-w-0 flex-1 break-all rounded border border-[#282A30] bg-[#0E0F11] px-2.5 py-1.5 font-mono text-[11px] text-[#D4D4D8]">
                     {idempotencyKey}
                   </code>
                   <Button
@@ -270,10 +270,10 @@ export default function PaymentsPage() {
         />
 
         {/* Unified Search & Direct Lookup */}
-        <div className="border-b border-ink-100 bg-ink-50/50 p-4">
+        <div className="border-b border-[#232529] bg-[#111215] p-3.5">
           <form onSubmit={handleLookup} className="flex flex-col gap-3 sm:flex-row">
             <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]" />
               <input
                 className="input pl-9 text-xs sm:text-sm"
                 value={search}
@@ -309,16 +309,16 @@ export default function PaymentsPage() {
                     <th className="px-5 py-3 text-right" />
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-ink-100">
+                <tbody className="divide-y divide-[#1E2024]">
                   {filtered.map((payment) => {
                     const status = statusStyle(PAYMENT_STATUS_STYLES, payment.status);
                     return (
-                      <tr key={payment.paymentId} className="hover:bg-ink-50/70">
+                      <tr key={payment.paymentId} className="hover:bg-[#191A1E] transition-colors">
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-1.5">
                             <Link
                               to={`/payments/${payment.paymentId}`}
-                              className="font-mono text-xs font-semibold text-brand-600 hover:underline"
+                              className="font-mono text-xs font-medium text-indigo-400 hover:text-indigo-300 hover:underline"
                             >
                               {shortId(payment.paymentId)}
                             </Link>
@@ -329,15 +329,15 @@ export default function PaymentsPage() {
                             />
                           </div>
                         </td>
-                        <td className="max-w-[180px] truncate px-5 py-3.5 text-xs text-ink-600">
-                          <span className="font-medium text-ink-900 block truncate">{payment.customerName || "—"}</span>
-                          <span className="text-[11px] text-ink-500 block truncate">{payment.customerEmail || "—"}</span>
+                        <td className="max-w-[180px] truncate px-5 py-3.5 text-xs text-[#8E8E93]">
+                          <span className="font-medium text-[#F4F4F5] block truncate">{payment.customerName || "—"}</span>
+                          <span className="text-[11px] text-[#71717A] block truncate">{payment.customerEmail || "—"}</span>
                         </td>
-                        <td className="whitespace-nowrap px-5 py-3.5 text-xs font-semibold text-ink-900">
+                        <td className="whitespace-nowrap px-5 py-3.5 text-xs font-semibold text-[#F4F4F5]">
                           <div>
                             <span>{formatMoney(payment.amount, payment.currency)}</span>
                             {payment.refundedAmount > 0 && (
-                              <span className="block text-[10px] font-normal text-rose-600">
+                              <span className="block text-[10px] font-normal text-rose-400">
                                 -{formatMoney(payment.refundedAmount, payment.currency)} ref
                               </span>
                             )}
@@ -353,7 +353,7 @@ export default function PaymentsPage() {
                             )}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-5 py-3.5 text-xs text-ink-500">
+                        <td className="whitespace-nowrap px-5 py-3.5 text-xs text-[#71717A]">
                           {formatDateTime(payment.createdAt)}
                         </td>
                         <td className="px-5 py-3.5 text-right whitespace-nowrap">
@@ -363,7 +363,7 @@ export default function PaymentsPage() {
                                 <button
                                   type="button"
                                   onClick={() => setRefundPayment(payment)}
-                                  className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline"
+                                  className="inline-flex items-center gap-1 text-xs font-medium text-rose-400 hover:text-rose-300 hover:underline transition-colors"
                                   title="Issue partial or full refund"
                                 >
                                   <RotateCcw className="h-3 w-3" />
@@ -375,7 +375,7 @@ export default function PaymentsPage() {
                                 to={`/checkout/${payment.paymentId}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline"
+                                className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400 hover:text-emerald-300 hover:underline transition-colors"
                                 title="Open customer checkout session"
                               >
                                 <span>Checkout</span>
@@ -384,7 +384,7 @@ export default function PaymentsPage() {
                             )}
                             <Link
                               to={`/payments/${payment.paymentId}`}
-                              className="text-xs font-semibold text-brand-600 hover:underline"
+                              className="text-xs font-medium text-indigo-400 hover:text-indigo-300 hover:underline transition-colors"
                             >
                               Details →
                             </Link>
@@ -399,13 +399,13 @@ export default function PaymentsPage() {
           ) : (
             <div className="py-12">
               <div className="mx-auto max-w-sm text-center">
-                <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-xl bg-ink-100 text-ink-500">
+                <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-lg bg-[#1C1D21] text-[#8E8E93] border border-[#282A30]">
                   <CreditCard className="h-5 w-5" />
                 </div>
-                <h3 className="text-sm font-semibold text-ink-900">
+                <h3 className="text-sm font-semibold text-[#F4F4F5]">
                   {payments.length ? "No matching payments" : "No payments yet"}
                 </h3>
-                <p className="mt-1 text-xs text-ink-500">
+                <p className="mt-1 text-xs text-[#8E8E93]">
                   {payments.length
                     ? "Try adjusting your search query or payment ID."
                     : "Create your first test payment above to start recording activity."}

@@ -3,26 +3,26 @@ import { Loader2 } from "lucide-react";
 
 const VARIANTS = {
   primary:
-    "bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800 disabled:bg-ink-200 disabled:text-ink-400",
+    "bg-gradient-to-b from-indigo-500 to-indigo-600 text-white font-medium shadow-[0_1px_3px_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.22)] hover:from-indigo-400 hover:to-indigo-500 active:from-indigo-600 active:to-indigo-700 disabled:opacity-50 disabled:pointer-events-none border border-indigo-400/30 transition-all",
   secondary:
-    "bg-white text-ink-800 border border-ink-200 shadow-2xs hover:border-ink-300 hover:bg-ink-50 active:bg-ink-100 disabled:text-ink-400 disabled:border-ink-200",
+    "bg-[#16171A] text-[#E4E4E7] border border-[#282A30] shadow-[0_1px_2px_rgba(0,0,0,0.4),inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-[#383B44] hover:bg-[#1C1E23] hover:text-[#FFFFFF] active:bg-[#131416] disabled:opacity-40 disabled:pointer-events-none transition-all",
   subtle:
-    "bg-ink-100 text-ink-700 hover:bg-ink-200 active:bg-ink-300 disabled:text-ink-400",
+    "bg-[#191A1E] text-[#D4D4D8] hover:bg-[#202227] hover:text-[#FFFFFF] border border-[#282A30] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] disabled:opacity-40 disabled:pointer-events-none transition-all",
   danger:
-    "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs hover:bg-rose-100 active:bg-rose-200 disabled:text-rose-300",
+    "bg-[#241417] text-[#F87171] border border-[#3E1D22] shadow-[inset_0_1px_0_0_rgba(248,113,113,0.12)] hover:bg-[#2E181D] hover:border-[#52242B] active:bg-[#381B21] disabled:opacity-40 disabled:pointer-events-none transition-all",
   success:
-    "bg-emerald-600 text-white shadow-glow-sm hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-emerald-200",
+    "bg-[#13231B] text-[#34D399] border border-[#1A3A2A] shadow-[inset_0_1px_0_0_rgba(52,211,153,0.12)] hover:bg-[#182F24] hover:border-[#224E38] disabled:opacity-40 disabled:pointer-events-none transition-all",
   ghost:
-    "bg-transparent text-ink-600 hover:bg-ink-100 hover:text-ink-900 disabled:text-ink-300",
-  link: "bg-transparent text-brand-600 underline-offset-4 hover:text-brand-700 hover:underline p-0 h-auto font-semibold",
+    "bg-transparent text-[#8E8E93] hover:bg-[#18191D] hover:text-[#F4F4F5] disabled:opacity-40 disabled:pointer-events-none transition-all",
+  link: "bg-transparent text-indigo-400 underline-offset-4 hover:text-indigo-300 hover:underline p-0 h-auto font-medium transition-all",
 };
 
 const SIZES = {
-  sm: "h-8 px-3 text-xs gap-1.5 rounded-lg",
-  md: "h-9 px-3.5 text-sm gap-2 rounded-xl",
-  lg: "h-10 px-4 text-sm gap-2 rounded-xl",
-  xl: "h-11 px-5 text-sm gap-2 rounded-xl",
-  icon: "h-9 w-9 p-0 rounded-xl",
+  sm: "h-8 px-2.5 text-xs gap-1.5 rounded-lg",
+  md: "h-9 px-3.5 text-xs font-medium gap-2 rounded-lg",
+  lg: "h-10 px-4 text-sm font-medium gap-2 rounded-lg",
+  xl: "h-11 px-5 text-sm font-medium gap-2.5 rounded-lg",
+  icon: "h-9 w-9 p-0 rounded-lg",
   "icon-sm": "h-8 w-8 p-0 rounded-lg",
 };
 
@@ -40,7 +40,7 @@ const Button = forwardRef(function Button(
   ref,
 ) {
   const base =
-    "inline-flex items-center justify-center rounded-xl font-semibold transition duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/20 disabled:cursor-not-allowed whitespace-nowrap";
+    "inline-flex items-center justify-center rounded-xl font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:cursor-not-allowed whitespace-nowrap";
   return (
     <button
       ref={ref}
@@ -51,7 +51,7 @@ const Button = forwardRef(function Button(
       } ${className}`}
       {...props}
     >
-      {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+      {loading && <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden="true" />}
       {children}
     </button>
   );

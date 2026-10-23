@@ -92,17 +92,21 @@ export default function SearchModal({ isOpen, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 px-4 bg-ink-950/50 backdrop-blur-sm animate-fade-in" onClick={onClose} role="presentation">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 px-4 bg-black/75 backdrop-blur-md animate-fade-in"
+      onClick={onClose}
+      role="presentation"
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Search console"
-        className="w-full max-w-xl overflow-hidden rounded-2xl border border-ink-200/80 bg-white shadow-2xl transition-all"
+        className="w-full max-w-xl overflow-hidden rounded-xl border border-[#282A30] bg-[#16171A] shadow-pop transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search header */}
-        <div className="relative flex items-center border-b border-ink-100 px-4 py-3">
-          <Search className="h-5 w-5 text-ink-400 mr-3 shrink-0" />
+        <div className="relative flex items-center border-b border-[#232529] px-4 py-3 bg-[#111215]">
+          <Search className="h-4 w-4 text-[#71717A] mr-3 shrink-0" />
           <form onSubmit={handleDirectLookup} className="flex-1">
             <input
               ref={inputRef}
@@ -110,46 +114,46 @@ export default function SearchModal({ isOpen, onClose }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search pages, recent payments, or paste a payment ID..."
-              className="w-full bg-transparent text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none"
+              className="w-full bg-transparent text-sm text-[#F4F4F5] placeholder:text-[#71717A] focus:outline-none"
             />
           </form>
           {query && (
             <button
               type="button"
               onClick={() => setQuery("")}
-              className="rounded-lg p-1 text-ink-400 hover:bg-ink-100"
+              className="rounded-lg p-1 text-[#8E8E93] hover:bg-[#232529] hover:text-[#F4F4F5]"
               aria-label="Clear search"
             >
               <X className="h-4 w-4" />
             </button>
           )}
-          <kbd className="hidden sm:inline-block ml-2 rounded-md border border-ink-200 bg-ink-50 px-1.5 py-0.5 text-[10px] font-semibold text-ink-500">
+          <kbd className="hidden sm:inline-block ml-2 rounded border border-[#2D3037] bg-[#18191D] px-1.5 py-0.5 text-[10px] font-medium text-[#71717A]">
             ESC
           </kbd>
         </div>
 
         {/* Content list */}
-        <div className="max-h-[60vh] overflow-y-auto p-2 space-y-3">
+        <div className="max-h-[60vh] overflow-y-auto p-2.5 space-y-3">
           {/* Direct ID quick action if query looks like an ID */}
           {looksLikePaymentId && (
             <button
               type="button"
               onClick={handleDirectLookup}
-              className="flex w-full items-center justify-between rounded-xl p-3 text-left bg-brand-50/70 border border-brand-200 text-brand-900 hover:bg-brand-100/70 transition"
+              className="flex w-full items-center justify-between rounded-lg p-3 text-left bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 hover:bg-indigo-500/15 transition-colors"
             >
               <div className="flex items-center gap-2.5">
-                <Search className="h-4 w-4 text-brand-600 shrink-0" />
+                <Search className="h-4 w-4 text-indigo-400 shrink-0" />
                 <span className="text-xs font-medium">
-                  Look up payment ID: <strong className="font-mono">{q}</strong>
+                  Look up payment ID: <strong className="font-mono text-[#F4F4F5]">{q}</strong>
                 </span>
               </div>
-              <ArrowRight className="h-4 w-4 text-brand-600" />
+              <ArrowRight className="h-4 w-4 text-indigo-400" />
             </button>
           )}
 
           {/* Pages */}
           <div>
-            <p className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-ink-400">
+            <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#636366]">
               Quick Navigation
             </p>
             <div className="space-y-0.5">
@@ -160,13 +164,13 @@ export default function SearchModal({ isOpen, onClose }) {
                     key={page.path}
                     type="button"
                     onClick={() => handleSelectPage(page.path)}
-                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-medium text-ink-700 hover:bg-ink-50 hover:text-ink-900 transition"
+                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-medium text-[#D4D4D8] hover:bg-[#1C1D21] hover:text-[#FFFFFF] transition-colors"
                   >
                     <div className="flex items-center gap-2.5">
-                      <Icon className="h-4 w-4 text-ink-400" />
+                      <Icon className="h-4 w-4 text-[#71717A]" />
                       <span>{page.title}</span>
                     </div>
-                    <span className="text-[10px] font-mono text-ink-400">{page.path}</span>
+                    <span className="text-[10px] font-mono text-[#636366]">{page.path}</span>
                   </button>
                 );
               })}
@@ -176,8 +180,8 @@ export default function SearchModal({ isOpen, onClose }) {
           {/* Recent Payments in this session */}
           {matchedPayments.length > 0 && (
             <div>
-              <p className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-ink-400">
-              Recent payments ({matchedPayments.length})
+              <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#636366]">
+                Recent payments ({matchedPayments.length})
               </p>
               <div className="space-y-1">
                 {matchedPayments.slice(0, 5).map((payment) => (
@@ -185,22 +189,22 @@ export default function SearchModal({ isOpen, onClose }) {
                     key={payment.paymentId}
                     type="button"
                     onClick={() => handleSelectPayment(payment.paymentId)}
-                    className="flex w-full items-center justify-between rounded-xl p-2.5 text-left border border-ink-100 hover:border-brand-200 hover:bg-brand-50/30 transition group"
+                    className="flex w-full items-center justify-between rounded-lg p-2.5 text-left border border-[#232529] bg-[#111215] hover:border-[#33363D] hover:bg-[#151619] transition-colors group"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-semibold text-ink-900 group-hover:text-brand-700">
+                        <span className="font-mono text-xs font-semibold text-[#E4E4E7] group-hover:text-indigo-400">
                           {shortId(payment.paymentId)}
                         </span>
-                        <span className="rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 text-[10px] font-medium text-emerald-700">
+                        <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 text-[10px] font-medium text-emerald-400">
                           {payment.status || "CREATED"}
                         </span>
                       </div>
-                      <p className="mt-0.5 truncate text-[11px] text-ink-400">
+                      <p className="mt-0.5 truncate text-[11px] text-[#8E8E93]">
                         {payment.customerEmail || "No email"} · {timeAgo(payment.createdAt)}
                       </p>
                     </div>
-                    <span className="font-mono text-xs font-bold text-ink-800">
+                    <span className="font-mono text-xs font-semibold text-[#F4F4F5]">
                       {formatMoney(payment.amount, payment.currency)}
                     </span>
                   </button>
@@ -210,13 +214,13 @@ export default function SearchModal({ isOpen, onClose }) {
           )}
 
           {q && !looksLikePaymentId && matchedPages.length === 0 && matchedPayments.length === 0 && (
-            <p className="px-3 py-6 text-center text-sm text-ink-500">No matching pages or saved payments.</p>
+            <p className="px-3 py-6 text-center text-sm text-[#8E8E93]">No matching pages or saved payments.</p>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-ink-100 bg-ink-50/50 px-4 py-2.5 text-[11px] text-ink-500">
-          <span>Tip: Press <strong>⌘K</strong> anytime to open this window</span>
+        <div className="flex items-center justify-between border-t border-[#232529] bg-[#111215] px-4 py-2 text-[11px] text-[#71717A]">
+          <span>Tip: Press <strong className="text-[#A1A1AA]">⌘K</strong> anytime to open search</span>
         </div>
       </div>
     </div>

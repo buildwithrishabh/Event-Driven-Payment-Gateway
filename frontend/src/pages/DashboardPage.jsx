@@ -55,7 +55,7 @@ export default function DashboardPage() {
     <div className="animate-fade-in space-y-6">
       <PageHeader
         title="Overview"
-        description={`Welcome back${merchant?.name ? `, ${merchant.name}` : ""}. Monitor your ledger balance and recent transactions.`}
+        description={`Welcome back${merchant?.name ? `, ${merchant.name}` : ""}. Monitor your live ledger balance, settlements, and recent gateway charges.`}
         actions={
           <div className="flex items-center gap-2.5">
             <Button
@@ -70,7 +70,7 @@ export default function DashboardPage() {
             </Button>
             <Link
               to="/payments"
-              className="inline-flex h-9 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-indigo-600 px-3.5 text-xs font-medium text-white shadow-xs hover:bg-indigo-500 active:bg-indigo-700 transition-colors"
             >
               <Plus className="h-4 w-4" />
               Create payment
@@ -90,11 +90,11 @@ export default function DashboardPage() {
         <Card>
           <CardBody className="flex flex-wrap items-center justify-between gap-3 p-5">
             <div>
-              <p className="text-sm font-semibold text-ink-900">Ledger balance unavailable</p>
-              <p className="mt-1 text-sm text-ink-500">{balance.error.message}</p>
+              <p className="text-sm font-semibold text-[#F4F4F5]">Ledger balance unavailable</p>
+              <p className="mt-1 text-xs text-[#8E8E93]">{balance.error.message}</p>
             </div>
             <Button variant="secondary" size="sm" onClick={balance.refresh}>
-              <RefreshCw className="h-4 w-4" /> Try again
+              <RefreshCw className="h-3.5 w-3.5" /> Try again
             </Button>
           </CardBody>
         </Card>
@@ -134,7 +134,7 @@ export default function DashboardPage() {
             action={
               <Link
                 to="/payments"
-                className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700"
+                className="inline-flex items-center gap-1 text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
               >
                 View all <ArrowRight className="h-3.5 w-3.5" />
               </Link>
@@ -153,29 +153,29 @@ export default function DashboardPage() {
                       <th className="px-5 py-3 text-right">Created</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-ink-100">
+                  <tbody className="divide-y divide-[#1E2024]">
                     {recent.map((payment) => {
                       const status = statusStyle(PAYMENT_STATUS_STYLES, payment.status);
                       return (
-                        <tr key={payment.paymentId} className="hover:bg-ink-50/70">
+                        <tr key={payment.paymentId} className="hover:bg-[#191A1E] transition-colors">
                           <td className="px-5 py-3.5">
                             <Link
-                              className="font-mono text-xs font-semibold text-brand-600 hover:underline"
+                              className="font-mono text-xs font-medium text-indigo-400 hover:text-indigo-300 hover:underline"
                               to={`/payments/${payment.paymentId}`}
                             >
                               {shortId(payment.paymentId)}
                             </Link>
                           </td>
-                          <td className="max-w-[200px] truncate px-5 py-3.5 text-xs text-ink-600">
+                          <td className="max-w-[200px] truncate px-5 py-3.5 text-xs text-[#8E8E93]">
                             {payment.customerEmail || "—"}
                           </td>
-                          <td className="whitespace-nowrap px-5 py-3.5 text-xs font-semibold text-ink-900">
+                          <td className="whitespace-nowrap px-5 py-3.5 text-xs font-semibold text-[#F4F4F5]">
                             {formatMoney(payment.amount, payment.currency)}
                           </td>
                           <td className="px-5 py-3.5">
                             <span className={`chip ${status.className}`}>{status.label}</span>
                           </td>
-                          <td className="whitespace-nowrap px-5 py-3.5 text-right text-xs text-ink-400">
+                          <td className="whitespace-nowrap px-5 py-3.5 text-right text-xs text-[#71717A]">
                             {timeAgo(payment.createdAt)}
                           </td>
                         </tr>
@@ -192,7 +192,7 @@ export default function DashboardPage() {
                 action={
                   <Link
                     to="/payments"
-                    className="inline-flex items-center gap-2 rounded-xl bg-brand-50 px-3.5 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-100"
+                    className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-medium text-white hover:bg-indigo-500 transition-colors"
                   >
                     <Plus className="h-3.5 w-3.5" /> Create payment
                   </Link>
@@ -207,26 +207,26 @@ export default function DashboardPage() {
         <div className="space-y-4">
           <Card>
             <CardHeader title="Gateway status" icon={Activity} />
-            <CardBody className="space-y-4 p-4">
+            <CardBody className="space-y-4 p-5">
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-ink-600">API Gateway</span>
+                  <span className="text-[#8E8E93]">API Gateway</span>
                   <StatusBadge loading={health.loading} ok={health.apiUp} />
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-ink-600">Ledger Engine (Redis)</span>
+                  <span className="text-[#8E8E93]">Ledger Engine (Redis)</span>
                   <StatusBadge loading={health.loading} ok={health.redisUp} />
                 </div>
               </div>
 
-              <div className="rounded-xl border border-ink-100 bg-ink-50/70 p-3 text-xs">
-                <div className="flex items-center justify-between text-ink-600">
+              <div className="rounded-lg border border-[#232529] bg-[#111215] p-3 text-xs">
+                <div className="flex items-center justify-between text-[#8E8E93]">
                   <span>Merchant Mode</span>
-                  <span className="font-medium text-ink-900">Live Gateway</span>
+                  <span className="font-medium text-[#F4F4F5]">Live Gateway</span>
                 </div>
-                <div className="mt-1 flex items-center justify-between text-ink-500">
+                <div className="mt-1.5 flex items-center justify-between text-[#71717A]">
                   <span>Settlement</span>
-                  <span>Instant Double-Entry</span>
+                  <span className="text-[#A1A1AA] font-medium">Instant Double-Entry</span>
                 </div>
               </div>
 
@@ -244,36 +244,36 @@ export default function DashboardPage() {
 
           <Card>
             <CardHeader title="Developer shortcuts" />
-            <CardBody className="space-y-2 p-3">
+            <CardBody className="space-y-1 p-2.5">
               <Link
                 to="/refunds"
-                className="flex items-center justify-between rounded-lg p-2 text-xs text-ink-700 transition hover:bg-ink-50"
+                className="flex items-center justify-between rounded-lg p-2.5 text-xs text-[#D4D4D8] transition-colors hover:bg-[#1C1D21] hover:text-[#FFFFFF]"
               >
-                <div className="flex items-center gap-2">
-                  <RotateCcw className="h-3.5 w-3.5 text-rose-600" />
+                <div className="flex items-center gap-2.5">
+                  <RotateCcw className="h-3.5 w-3.5 text-rose-400" />
                   <span>Refunds & Reversals</span>
                 </div>
-                <ArrowRight className="h-3 w-3 text-ink-400" />
+                <ArrowRight className="h-3 w-3 text-[#71717A]" />
               </Link>
               <Link
                 to="/api"
-                className="flex items-center justify-between rounded-lg p-2 text-xs text-ink-700 transition hover:bg-ink-50"
+                className="flex items-center justify-between rounded-lg p-2.5 text-xs text-[#D4D4D8] transition-colors hover:bg-[#1C1D21] hover:text-[#FFFFFF]"
               >
-                <div className="flex items-center gap-2">
-                  <Code2 className="h-3.5 w-3.5 text-brand-600" />
+                <div className="flex items-center gap-2.5">
+                  <Code2 className="h-3.5 w-3.5 text-indigo-400" />
                   <span>API Reference</span>
                 </div>
-                <ArrowRight className="h-3 w-3 text-ink-400" />
+                <ArrowRight className="h-3 w-3 text-[#71717A]" />
               </Link>
               <Link
                 to="/webhooks"
-                className="flex items-center justify-between rounded-lg p-2 text-xs text-ink-700 transition hover:bg-ink-50"
+                className="flex items-center justify-between rounded-lg p-2.5 text-xs text-[#D4D4D8] transition-colors hover:bg-[#1C1D21] hover:text-[#FFFFFF]"
               >
-                <div className="flex items-center gap-2">
-                  <Webhook className="h-3.5 w-3.5 text-brand-600" />
+                <div className="flex items-center gap-2.5">
+                  <Webhook className="h-3.5 w-3.5 text-indigo-400" />
                   <span>Webhook Endpoints</span>
                 </div>
-                <ArrowRight className="h-3 w-3 text-ink-400" />
+                <ArrowRight className="h-3 w-3 text-[#71717A]" />
               </Link>
             </CardBody>
           </Card>
@@ -289,15 +289,19 @@ function StatusBadge({ loading, ok }) {
     <span
       className={`chip ${
         loading
-          ? "border-ink-200 bg-ink-50 text-ink-600"
+          ? "border-[#282A30] bg-[#18191D] text-[#8E8E93]"
           : ok
-            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-            : "border-rose-200 bg-rose-50 text-rose-700"
+            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+            : "border-rose-500/20 bg-rose-500/10 text-rose-400"
       }`}
     >
       <span
         className={`h-1.5 w-1.5 rounded-full ${
-          loading ? "bg-ink-400" : ok ? "bg-emerald-500" : "bg-rose-500"
+          loading
+            ? "bg-[#71717A]"
+            : ok
+              ? "bg-emerald-400"
+              : "bg-rose-400"
         }`}
       />
       {label}

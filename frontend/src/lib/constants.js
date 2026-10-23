@@ -15,11 +15,11 @@ export const PAYMENT_STATUS = {
 };
 
 export const PAYMENT_STATUS_STYLES = {
-  CREATED: { label: "Created", className: "border-ink-200/80 bg-ink-100 text-ink-600" },
-  PROCESSING: { label: "Processing", className: "border-amber-200/70 bg-amber-50 text-amber-700" },
-  SUCCEEDED: { label: "Succeeded", className: "border-emerald-200/70 bg-emerald-50 text-emerald-700" },
-  FAILED: { label: "Failed", className: "border-rose-200/70 bg-rose-50 text-rose-700" },
-  CANCELLED: { label: "Cancelled", className: "border-ink-200 bg-ink-100 text-ink-500" },
+  CREATED: { label: "Created", className: "border-[#26282E] bg-[#16171A] text-zinc-300" },
+  PROCESSING: { label: "Processing", className: "border-amber-500/20 bg-amber-500/10 text-amber-400" },
+  SUCCEEDED: { label: "Succeeded", className: "border-emerald-500/20 bg-emerald-500/10 text-emerald-400" },
+  FAILED: { label: "Failed", className: "border-rose-500/20 bg-rose-500/10 text-rose-400" },
+  CANCELLED: { label: "Cancelled", className: "border-[#26282E] bg-[#16171A] text-zinc-400" },
 };
 
 /* -------------------------------------------------------------------------- */
@@ -33,36 +33,36 @@ export const REFUND_STATUS = {
 };
 
 export const REFUND_STATUS_STYLES = {
-  PENDING: { label: "Pending", className: "border-amber-200/70 bg-amber-50 text-amber-700" },
-  PROCESSING: { label: "Processing", className: "border-sky-200/70 bg-sky-50 text-sky-700" },
-  SUCCEEDED: { label: "Succeeded", className: "border-emerald-200/70 bg-emerald-50 text-emerald-700" },
-  FAILED: { label: "Failed", className: "border-rose-200/70 bg-rose-50 text-rose-700" },
+  PENDING: { label: "Pending", className: "border-amber-500/20 bg-amber-500/10 text-amber-400" },
+  PROCESSING: { label: "Processing", className: "border-sky-500/20 bg-sky-500/10 text-sky-400" },
+  SUCCEEDED: { label: "Succeeded", className: "border-emerald-500/20 bg-emerald-500/10 text-emerald-400" },
+  FAILED: { label: "Failed", className: "border-rose-500/20 bg-rose-500/10 text-rose-400" },
 };
 
 export const PAYMENT_REFUND_STATUS_STYLES = {
-  NONE: { label: "Not Refunded", className: "border-ink-200/80 bg-ink-100 text-ink-600" },
-  PARTIAL: { label: "Partially Refunded", className: "border-amber-200/70 bg-amber-50 text-amber-700" },
-  FULL: { label: "Fully Refunded", className: "border-purple-200/70 bg-purple-50 text-purple-700" },
+  NONE: { label: "Not Refunded", className: "border-[#26282E] bg-[#16171A] text-zinc-300" },
+  PARTIAL: { label: "Partially Refunded", className: "border-amber-500/20 bg-amber-500/10 text-amber-400" },
+  FULL: { label: "Fully Refunded", className: "border-indigo-500/20 bg-indigo-500/10 text-indigo-400" },
 };
 
 export const MERCHANT_STATUS_STYLES = {
-  ACTIVE: { label: "Active", className: "border-emerald-200/70 bg-emerald-50 text-emerald-700" },
-  SUSPENDED: { label: "Suspended", className: "border-rose-200/70 bg-rose-50 text-rose-700" },
+  ACTIVE: { label: "Active", className: "border-emerald-500/20 bg-emerald-500/10 text-emerald-400" },
+  SUSPENDED: { label: "Suspended", className: "border-rose-500/20 bg-rose-500/10 text-rose-400" },
 };
 
 export const LEDGER_TYPE_STYLES = {
-  CREDIT: { label: "Credit", className: "border-emerald-200/70 bg-emerald-50 text-emerald-700" },
-  DEBIT: { label: "Debit", className: "border-rose-200/70 bg-rose-50 text-rose-700" },
+  CREDIT: { label: "Credit", className: "border-emerald-500/20 bg-emerald-500/10 text-emerald-400" },
+  DEBIT: { label: "Debit", className: "border-rose-500/20 bg-rose-500/10 text-rose-400" },
 };
 
 export const WEBHOOK_STATUS_STYLES = {
-  PENDING: { label: "Pending", className: "border-amber-200/70 bg-amber-50 text-amber-700" },
-  SUCCESS: { label: "Success", className: "border-emerald-200/70 bg-emerald-50 text-emerald-700" },
-  FAILED: { label: "Failed", className: "border-rose-200/70 bg-rose-50 text-rose-700" },
+  PENDING: { label: "Pending", className: "border-amber-500/20 bg-amber-500/10 text-amber-400" },
+  SUCCESS: { label: "Success", className: "border-emerald-500/20 bg-emerald-500/10 text-emerald-400" },
+  FAILED: { label: "Failed", className: "border-rose-500/20 bg-rose-500/10 text-rose-400" },
 };
 
 export function statusStyle(map, status) {
-  return map[status] || { label: status || "Unknown", className: "border-ink-200 bg-ink-100 text-ink-600" };
+  return map[status] || { label: status || "Unknown", className: "border-[#26282E] bg-[#16171A] text-zinc-300" };
 }
 
 /* -------------------------------------------------------------------------- */

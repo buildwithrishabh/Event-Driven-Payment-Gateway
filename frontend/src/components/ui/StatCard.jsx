@@ -14,11 +14,11 @@ export default function StatCard({
   children,
 }) {
   const tones = {
-    brand: "bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100",
-    success: "bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-100",
-    warning: "bg-amber-50 text-amber-600 ring-1 ring-inset ring-amber-100",
-    danger: "bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-100",
-    neutral: "bg-ink-100 text-ink-600 ring-1 ring-inset ring-ink-200",
+    brand: "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20",
+    success: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
+    warning: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
+    danger: "bg-rose-500/10 text-rose-400 border border-rose-500/20",
+    neutral: "bg-[#232529] text-[#D4D4D8] border border-[#2D3037]",
   };
 
   const trendUp = trend != null && trend >= 0;
@@ -37,17 +37,17 @@ export default function StatCard({
           </span>
         )}
       </div>
-      <div className="mt-3">
+      <div className="mt-3.5">
         {children || (
           <>
-            <div className="flex items-baseline gap-2">
-              <p className="text-2xl font-semibold tracking-tight text-ink-900">{value}</p>
+            <div className="flex items-baseline gap-2.5">
+              <p className="text-2xl font-bold tracking-tight text-[#F4F4F5]">{value}</p>
               {trend != null && (
                 <span
-                  className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
+                  className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium border ${
                     trendUp
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "bg-rose-50 text-rose-700"
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                      : "bg-rose-500/10 text-rose-400 border-rose-500/20"
                   }`}
                 >
                   {trendUp ? (
@@ -59,7 +59,7 @@ export default function StatCard({
                 </span>
               )}
             </div>
-            {sublabel && <p className="mt-1 text-xs text-ink-500">{sublabel}</p>}
+            {sublabel && <p className="mt-1 text-xs text-[#8E8E93]">{sublabel}</p>}
           </>
         )}
       </div>

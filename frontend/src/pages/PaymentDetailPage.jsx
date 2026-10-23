@@ -86,8 +86,8 @@ export default function PaymentDetailPage() {
         actions={
           <div className="flex items-center gap-2">
             {(hasInFlightRefund || isInFlightPayment) && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 border border-amber-200 animate-pulse">
-                <RefreshCw className="h-3 w-3 animate-spin text-amber-600" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-300 border border-amber-500/20 animate-pulse">
+                <RefreshCw className="h-3 w-3 animate-spin text-amber-400" />
                 Live updating...
               </span>
             )}
@@ -96,7 +96,7 @@ export default function PaymentDetailPage() {
                 variant="danger"
                 size="sm"
                 onClick={() => setRefundModalOpen(true)}
-                className="gap-1.5 shadow-2xs"
+                className="gap-1.5"
               >
                 <RotateCcw className="h-3.5 w-3.5" /> Issue Refund
               </Button>
@@ -105,7 +105,7 @@ export default function PaymentDetailPage() {
               to={`/checkout/${payment?._id || id}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 transition-colors"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-medium text-white hover:bg-emerald-500 transition-colors"
             >
               <ExternalLink className="h-3.5 w-3.5" /> Open Checkout UI
             </Link>
@@ -114,7 +114,7 @@ export default function PaymentDetailPage() {
             </Button>
             <Link
               to="/payments"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 text-xs font-semibold text-ink-700 hover:bg-ink-50"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#282A30] bg-[#16171A] px-3 text-xs font-medium text-[#D4D4D8] hover:bg-[#1C1D21] hover:text-[#FFFFFF] transition-colors"
             >
               <ArrowLeft className="h-3.5 w-3.5" /> All payments
             </Link>
@@ -129,10 +129,10 @@ export default function PaymentDetailPage() {
       ) : error ? (
         <Card>
           <CardBody className="py-14 text-center">
-            <p className="text-base font-semibold text-ink-900">
+            <p className="text-base font-semibold text-[#F4F4F5]">
               {notFound ? "Payment not found" : invalidId ? "Invalid payment ID" : "Could not load payment"}
             </p>
-            <p className="mx-auto mt-1.5 max-w-md text-xs text-ink-500">
+            <p className="mx-auto mt-1.5 max-w-md text-xs text-[#8E8E93]">
               {notFound
                 ? "This transaction may not exist in your account, or the ID may be mistyped."
                 : error.message}
@@ -145,7 +145,7 @@ export default function PaymentDetailPage() {
               )}
               <Link
                 to="/payments"
-                className="inline-flex h-8 items-center rounded-lg bg-brand-600 px-3.5 text-xs font-semibold text-white hover:bg-brand-700"
+                className="inline-flex h-8 items-center rounded-lg bg-indigo-600 px-3.5 text-xs font-medium text-white hover:bg-indigo-500 transition-colors"
               >
                 Back to payments
               </Link>
@@ -157,14 +157,14 @@ export default function PaymentDetailPage() {
           {/* Main Transaction Card */}
           <div className="space-y-6">
             <Card>
-              <div className="flex flex-wrap items-center justify-between border-b border-ink-100 p-6">
+              <div className="flex flex-wrap items-center justify-between border-b border-[#232529] p-6">
                 <div>
-                  <p className="text-xs font-medium text-ink-500">Transaction amount</p>
-                  <p className="mt-1 text-3xl font-bold tracking-tight text-ink-950">
+                  <p className="text-xs font-medium uppercase tracking-wider text-[#71717A]">Transaction amount</p>
+                  <p className="mt-1 text-3xl font-extrabold tracking-tight text-[#F4F4F5]">
                     {formatMoney(payment.amount, payment.currency)}
                   </p>
                   {refundedAmount > 0 && (
-                    <p className="mt-1 text-xs text-rose-600 font-medium">
+                    <p className="mt-1 text-xs text-rose-400 font-medium">
                       {formatMoney(refundedAmount, payment.currency)} refunded ({formatMoney(remainingRefundable, payment.currency)} net)
                     </p>
                   )}
@@ -178,20 +178,20 @@ export default function PaymentDetailPage() {
                       </span>
                     )}
                   </div>
-                  <span className="text-[11px] text-ink-400">
+                  <span className="text-[11px] text-[#71717A]">
                     {formatDateTime(payment.createdAt)}
                   </span>
                 </div>
               </div>
 
               <CardBody className="p-6">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-400">
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#71717A]">
                   Payment Information
                 </h3>
-                <dl className="divide-y divide-ink-100">
+                <dl className="divide-y divide-[#1E2024]">
                   <InfoRow label="Payment ID">
                     <span className="flex items-center gap-2">
-                      <code className="break-all font-mono text-xs font-medium text-ink-800">
+                      <code className="break-all font-mono text-xs font-medium text-[#E4E4E7]">
                         {payment._id}
                       </code>
                       <CopyButton value={payment._id} showLabel={false} label="Copy payment ID" />
@@ -203,7 +203,7 @@ export default function PaymentDetailPage() {
                         href={`/checkout/${payment._id}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="truncate font-mono text-xs font-semibold text-brand-600 hover:underline max-w-[240px] inline-flex items-center gap-1"
+                        className="truncate font-mono text-xs font-medium text-indigo-400 hover:text-indigo-300 hover:underline max-w-[240px] inline-flex items-center gap-1"
                       >
                         <span>/checkout/{payment._id}</span>
                         <ExternalLink className="h-3 w-3 shrink-0" />
@@ -224,12 +224,12 @@ export default function PaymentDetailPage() {
                   {refundedAmount > 0 && (
                     <>
                       <InfoRow label="Refunded Amount">
-                        <span className="text-xs font-semibold text-rose-600">
+                        <span className="text-xs font-semibold text-rose-400">
                           {formatMoney(refundedAmount, payment.currency)}
                         </span>
                       </InfoRow>
                       <InfoRow label="Remaining Refundable">
-                        <span className="text-xs font-semibold text-emerald-700">
+                        <span className="text-xs font-semibold text-emerald-400">
                           {formatMoney(remainingRefundable, payment.currency)}
                         </span>
                       </InfoRow>
@@ -248,14 +248,14 @@ export default function PaymentDetailPage() {
 
             {/* Refund History Table */}
             <Card>
-              <div className="flex flex-wrap items-center justify-between border-b border-ink-100 px-6 py-4">
+              <div className="flex flex-wrap items-center justify-between border-b border-[#232529] px-6 py-4">
                 <div className="flex items-center gap-2.5">
-                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-rose-50 text-rose-600 border border-rose-200">
-                    <RotateCcw className="h-3.5 w-3.5" />
+                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                    <RotateCcw className="h-4 w-4" />
                   </span>
                   <div>
-                    <h3 className="text-sm font-semibold text-ink-950">Refund History</h3>
-                    <p className="text-xs text-ink-500">
+                    <h3 className="text-sm font-semibold text-[#F4F4F5]">Refund History</h3>
+                    <p className="text-xs text-[#8E8E93]">
                       Reversals and ledger debit entries for this payment.
                     </p>
                   </div>
@@ -276,7 +276,7 @@ export default function PaymentDetailPage() {
                 {refundList.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-ink-50/70 border-b border-ink-100 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+                      <thead className="bg-[#111214] border-b border-[#232529] text-[11px] font-medium uppercase tracking-wider text-[#71717A]">
                         <tr>
                           <th className="px-5 py-3">Refund ID</th>
                           <th className="px-5 py-3">Processor ID</th>
@@ -286,28 +286,28 @@ export default function PaymentDetailPage() {
                           <th className="px-5 py-3">Created</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-ink-100">
+                      <tbody className="divide-y divide-[#1E2024]">
                         {refundList.map((rfn) => {
                           const rfnStyle = statusStyle(REFUND_STATUS_STYLES, rfn.status);
                           return (
-                            <tr key={rfn._id} className="hover:bg-ink-50/60">
+                            <tr key={rfn._id} className="hover:bg-[#191A1E] transition-colors">
                               <td className="px-5 py-3.5 font-mono">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-semibold text-ink-900">{shortId(rfn._id)}</span>
+                                  <span className="font-medium text-[#E4E4E7]">{shortId(rfn._id)}</span>
                                   <CopyButton value={rfn._id} showLabel={false} label="Copy refund ID" />
                                 </div>
                               </td>
-                              <td className="px-5 py-3.5 font-mono text-ink-600">
+                              <td className="px-5 py-3.5 font-mono text-[#D4D4D8]">
                                 {rfn.processorRefundId ? (
                                   <div className="flex items-center gap-1">
                                     <span>{rfn.processorRefundId}</span>
                                     <CopyButton value={rfn.processorRefundId} showLabel={false} label="Copy processor ID" />
                                   </div>
                                 ) : (
-                                  <span className="text-ink-400">—</span>
+                                  <span className="text-[#636366]">—</span>
                                 )}
                               </td>
-                              <td className="px-5 py-3.5 font-semibold text-ink-950 whitespace-nowrap">
+                              <td className="px-5 py-3.5 font-semibold text-[#F4F4F5] whitespace-nowrap">
                                 {formatMoney(rfn.amount, rfn.currency || payment.currency)}
                               </td>
                               <td className="px-5 py-3.5">
@@ -315,10 +315,10 @@ export default function PaymentDetailPage() {
                                   {rfnStyle.label}
                                 </span>
                               </td>
-                              <td className="px-5 py-3.5 text-ink-600 max-w-[200px] truncate" title={rfn.reason}>
+                              <td className="px-5 py-3.5 text-[#8E8E93] max-w-[200px] truncate" title={rfn.reason}>
                                 {rfn.reason || "requested_by_customer"}
                               </td>
-                              <td className="px-5 py-3.5 text-ink-500 whitespace-nowrap">
+                              <td className="px-5 py-3.5 text-[#71717A] whitespace-nowrap">
                                 {formatDateTime(rfn.createdAt)}
                               </td>
                             </tr>
@@ -329,14 +329,14 @@ export default function PaymentDetailPage() {
                   </div>
                 ) : (
                   <div className="py-10 text-center px-4">
-                    <p className="text-xs font-semibold text-ink-800">No refunds recorded yet</p>
-                    <p className="mt-1 text-xs text-ink-500 max-w-sm mx-auto">
+                    <p className="text-xs font-semibold text-[#F4F4F5]">No refunds recorded yet</p>
+                    <p className="mt-1 text-xs text-[#8E8E93] max-w-sm mx-auto">
                       {payment.status === "SUCCEEDED"
                         ? `This payment has a refundable balance of ${formatMoney(remainingRefundable, payment.currency)}.`
                         : "Only succeeded payments can be refunded."}
                     </p>
                     {canRefund && (
-                      <div className="mt-3">
+                      <div className="mt-3.5">
                         <Button
                           variant="secondary"
                           size="sm"
@@ -356,10 +356,10 @@ export default function PaymentDetailPage() {
             {(payment.failureReason || payment.razorpayOrderId || payment.razorpayPaymentId) && (
               <Card>
                 <CardBody className="p-6">
-                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-400">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#71717A]">
                     Processor & Gateway Info
                   </h3>
-                  <dl className="divide-y divide-ink-100">
+                  <dl className="divide-y divide-[#1E2024]">
                     {payment.razorpayOrderId && (
                       <InfoRow label="Razorpay Order ID" value={payment.razorpayOrderId} mono />
                     )}
@@ -372,7 +372,7 @@ export default function PaymentDetailPage() {
                     )}
                     {payment.failureReason && (
                       <InfoRow label="Failure Reason">
-                        <span className="text-xs font-medium text-rose-600">
+                        <span className="text-xs font-medium text-rose-400">
                           {payment.failureReason}
                         </span>
                       </InfoRow>
@@ -387,26 +387,26 @@ export default function PaymentDetailPage() {
           <div className="space-y-4">
             {/* Refund Settlement Card */}
             <Card>
-              <CardBody className="space-y-3.5 p-5">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">
+              <CardBody className="space-y-4 p-5">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#71717A]">
                   Settlement & Reversals
                 </h3>
-                <div className="rounded-xl border border-ink-100 bg-ink-50/70 p-3 text-xs space-y-2">
-                  <div className="flex items-center justify-between text-ink-600">
+                <div className="rounded-lg border border-[#232529] bg-[#111215] p-3.5 text-xs space-y-2.5">
+                  <div className="flex items-center justify-between text-[#8E8E93]">
                     <span>Gross Capture</span>
-                    <span className="font-semibold text-ink-900">
+                    <span className="font-semibold text-[#F4F4F5]">
                       {formatMoney(totalAmount, payment.currency)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between text-ink-600">
+                  <div className="flex items-center justify-between text-[#8E8E93]">
                     <span>Total Refunded</span>
-                    <span className="font-semibold text-rose-600">
+                    <span className="font-semibold text-rose-400">
                       {refundedAmount > 0 ? `-${formatMoney(refundedAmount, payment.currency)}` : "₹0.00"}
                     </span>
                   </div>
-                  <div className="border-t border-ink-200/60 pt-2 flex items-center justify-between font-bold text-ink-950">
+                  <div className="border-t border-[#232529] pt-2.5 flex items-center justify-between font-semibold text-[#F4F4F5]">
                     <span>Net Settled</span>
-                    <span className="text-emerald-700">
+                    <span className="text-emerald-400">
                       {formatMoney(Math.max(0, totalAmount - refundedAmount), payment.currency)}
                     </span>
                   </div>
@@ -422,7 +422,7 @@ export default function PaymentDetailPage() {
                     <RotateCcw className="h-3.5 w-3.5" /> Issue Refund
                   </Button>
                 ) : remainingRefundable <= 0 && refundedAmount > 0 ? (
-                  <div className="rounded-lg bg-purple-50 border border-purple-200 p-2 text-center text-xs font-semibold text-purple-700">
+                  <div className="rounded-lg bg-purple-500/10 border border-purple-500/20 p-2 text-center text-xs font-medium text-purple-300">
                     Fully Refunded
                   </div>
                 ) : null}
@@ -430,32 +430,32 @@ export default function PaymentDetailPage() {
             </Card>
 
             <Card>
-              <CardBody className="space-y-3.5 p-5">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">
+              <CardBody className="space-y-4 p-5">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#71717A]">
                   Ledger Context
                 </h3>
-                <div className="rounded-xl border border-ink-100 bg-ink-50/70 p-3 text-xs space-y-2">
-                  <div className="flex items-center justify-between text-ink-600">
+                <div className="rounded-lg border border-[#232529] bg-[#111215] p-3.5 text-xs space-y-2.5">
+                  <div className="flex items-center justify-between text-[#8E8E93]">
                     <span>Ledger Status</span>
-                    <span className="font-semibold text-emerald-700">Double-Entry Settled</span>
+                    <span className="font-medium text-emerald-400">Double-Entry Settled</span>
                   </div>
-                  <div className="flex items-center justify-between text-ink-500">
+                  <div className="flex items-center justify-between text-[#71717A]">
                     <span>Audit Trail</span>
-                    <span>Immutable</span>
+                    <span className="text-[#A1A1AA] font-medium">Immutable</span>
                   </div>
                   {refundedAmount > 0 && (
-                    <div className="flex items-center justify-between text-rose-600">
+                    <div className="flex items-center justify-between text-rose-400">
                       <span>Ledger Reversal</span>
-                      <span className="font-semibold">Debited to Merchant</span>
+                      <span className="font-medium">Debited to Merchant</span>
                     </div>
                   )}
                 </div>
-                <p className="text-[11px] leading-relaxed text-ink-400">
+                <p className="text-[11px] leading-relaxed text-[#8E8E93]">
                   Transactions in ClearLedger automatically credit merchant ledger accounts upon capture and debit upon refund.
                 </p>
                 <Link
                   to="/ledger"
-                  className="inline-flex w-full items-center justify-center rounded-lg border border-ink-200 bg-white py-2 text-xs font-semibold text-ink-700 hover:bg-ink-50"
+                  className="inline-flex w-full items-center justify-center rounded-lg border border-[#282A30] bg-[#16171A] py-2 text-xs font-medium text-[#D4D4D8] hover:bg-[#1C1D21] hover:text-[#FFFFFF] transition-colors"
                 >
                   View full ledger entries →
                 </Link>

@@ -1,10 +1,12 @@
 const TONES = {
-  neutral: "border-ink-200/80 bg-ink-100 text-ink-600",
-  brand: "border-brand-200 bg-brand-50 text-brand-700",
-  solid: "border-transparent bg-brand-gradient text-white",
-  success: "border-emerald-200/70 bg-emerald-50 text-emerald-700",
-  warning: "border-amber-200/70 bg-amber-50 text-amber-700",
-  danger: "border-rose-200/70 bg-rose-50 text-rose-700",
+  neutral: "border-[#282A30] bg-[#18191D] text-[#D4D4D8]",
+  brand: "border-indigo-500/25 bg-indigo-500/10 text-indigo-300",
+  solid: "border-transparent bg-indigo-600 text-white shadow-xs",
+  success: "border-emerald-500/25 bg-emerald-500/10 text-emerald-400",
+  warning: "border-amber-500/25 bg-amber-500/10 text-amber-300",
+  danger: "border-rose-500/25 bg-rose-500/10 text-rose-400",
+  purple: "border-purple-500/25 bg-purple-500/10 text-purple-300",
+  sky: "border-sky-500/25 bg-sky-500/10 text-sky-300",
 };
 
 /**
@@ -15,7 +17,7 @@ export function Badge({ children, tone = "neutral", className = "", dot = false 
   const toneClass = TONES[tone] || TONES.neutral;
   return (
     <span className={`chip ${className || toneClass}`}>
-      {dot && <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />}
+      {dot && <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />}
       {children}
     </span>
   );

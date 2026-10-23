@@ -31,10 +31,10 @@ export default function CopyButton({
       onClick={handleCopy}
       title={title || label}
       aria-label={title || label}
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
         copied
-          ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-          : "border-ink-200 bg-white text-ink-500 hover:border-ink-300 hover:bg-ink-50 hover:text-ink-900"
+          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+          : "border-[#282A30] bg-[#16171A] text-[#8E8E93] hover:border-[#363840] hover:bg-[#1C1D21] hover:text-[#FFFFFF]"
       } ${className}`}
     >
       {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}

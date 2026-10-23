@@ -4,87 +4,105 @@
 
 @layer base {
   :root {
-    color-scheme: light;
+    color-scheme: dark;
   }
 
   html {
     -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
+    background-color: #0c0d0e;
   }
 
   body {
-    background-color: #f7f8fa;
-    color: #334155;
+    background-color: #0c0d0e;
+    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, 0.06), transparent 75%);
+    color: #d4d4d8;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
   h1,
   h2,
   h3,
-  h4 {
-    color: #0f172a;
+  h4,
+  h5,
+  h6 {
+    color: #f4f4f5;
+    letter-spacing: -0.015em;
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgb(203 213 225) transparent;
+    scrollbar-color: #26282e transparent;
   }
 
   *::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
   }
 
   *::-webkit-scrollbar-thumb {
     border-radius: 9999px;
-    background-color: rgba(203, 213, 225, 0.7);
+    background-color: #232529;
   }
 
   *::-webkit-scrollbar-thumb:hover {
-    background-color: #94a3b8;
+    background-color: #32353c;
   }
 
   :focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px rgba(99, 102, 241, 0.6);
+    box-shadow: 0 0 0 2px #0c0d0e, 0 0 0 4px rgba(99, 102, 241, 0.35);
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18), inset 0 1.5px 3px 0 rgba(0, 0, 0, 0.4);
+    border-color: #6366f1;
   }
 
   ::selection {
-    background-color: rgba(99, 102, 241, 0.2);
-    color: #0f172a;
+    background-color: rgba(99, 102, 241, 0.25);
+    color: #ffffff;
   }
 }
 
 @layer components {
   /* ---------------------------------------------------------------- Surfaces */
   .card {
-    border-radius: 0.75rem;
-    border: 1px solid #e2e8f0;
-    background-color: #ffffff;
-    box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px -1px rgb(15 23 42 / 0.03);
-    transition-property: color, background-color, border-color;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 150ms;
+    border-radius: 0.875rem;
+    border: 1px solid #232529;
+    background-color: #151619;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+    transition: all 160ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .card-hover:hover {
-    border-color: #a5b4fc;
+    border-color: #33363d;
+    background-color: #18191d;
+    box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.65), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+    transform: translateY(-1px);
   }
 
   .card-dark {
-    border-radius: 0.75rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background-color: #0f172a;
-    color: #ffffff;
+    border-radius: 0.875rem;
+    border: 1px solid #232529;
+    background-color: #101114;
+    color: #f4f4f5;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
   }
 
   .glass {
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    background-color: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid #232529;
+    background-color: rgba(18, 19, 22, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
   }
 
   /* ------------------------------------------------------------------ Forms */
@@ -93,48 +111,51 @@
     display: block;
     font-size: 0.75rem;
     line-height: 1rem;
-    font-weight: 600;
-    letter-spacing: 0.025em;
-    color: #334155;
+    font-weight: 500;
+    letter-spacing: 0.015em;
+    color: #a1a1aa;
   }
 
   .input {
     width: 100%;
-    border-radius: 0.5rem;
-    border: 1px solid #cbd5e1;
-    background-color: #ffffff;
-    padding: 0.625rem 0.75rem;
+    border-radius: 0.625rem;
+    border: 1px solid #26282e;
+    background-color: #101114;
+    padding: 0.625rem 0.875rem;
     font-size: 0.875rem;
     line-height: 1.25rem;
-    color: #0f172a;
+    color: #f4f4f5;
+    box-shadow: inset 0 1.5px 3px 0 rgba(0, 0, 0, 0.4);
     transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .input::placeholder {
-    color: #94a3b8;
+    color: #52525b;
   }
 
   .input:hover {
-    border-color: #cbd5e1;
+    border-color: #363840;
   }
 
   .input:focus {
     border-color: #6366f1;
+    background-color: #101114;
     outline: none;
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2), inset 0 1.5px 3px 0 rgba(0, 0, 0, 0.4);
   }
 
   .input:disabled {
     cursor: not-allowed;
-    background-color: #f8fafc;
-    color: #94a3b8;
+    background-color: #0c0d0e;
+    color: #52525b;
+    border-color: #1f2024;
   }
 
   .hint {
     margin-top: 0.375rem;
     font-size: 0.75rem;
     line-height: 1rem;
-    color: #64748b;
+    color: #71717a;
   }
 
   /* ------------------------------------------------------------------ Chips */
@@ -144,54 +165,53 @@
     gap: 0.375rem;
     border-radius: 9999px;
     border: 1px solid;
-    padding: 0.25rem 0.625rem;
+    padding: 0.2rem 0.5625rem;
     font-size: 0.75rem;
     line-height: 1rem;
-    font-weight: 600;
+    font-weight: 500;
+    letter-spacing: 0.01em;
   }
 
   .chip-neutral {
-    border-color: rgba(226, 232, 240, 0.8);
-    background-color: #f1f5f9;
-    color: #475569;
+    border-color: #26282e;
+    background-color: #18191d;
+    color: #a1a1aa;
   }
 
   /* --------------------------------------------------------------- Typography */
   .text-gradient {
-    background-image: linear-gradient(135deg, #4f46e5 0%, #4f46e5 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: #f4f4f5;
   }
 
   .eyebrow {
     font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: #94a3b8;
+    letter-spacing: 0.08em;
+    color: #71717a;
   }
 
-  /* ----------------------------------------------------------------- Badges */
+  /* ----------------------------------------------------------------- Metrics & Tiles */
   .stat-tile {
     position: relative;
     overflow: hidden;
     border-radius: 0.75rem;
-    border: 1px solid #e2e8f0;
-    background-color: #ffffff;
-    padding: 1rem;
-    box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px -1px rgb(15 23 42 / 0.03);
-    transition-property: color, background-color, border-color;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 150ms;
+    border: 1px solid #232529;
+    background-color: #16171a;
+    padding: 1.125rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+    transition: all 160ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .stat-tile:hover {
-    border-color: #a5b4fc;
+    border-color: #33363d;
+    background-color: #191a1e;
+    box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.6);
+    transform: translateY(-1px);
   }
 }
 
-/* Consistent, restrained data table treatment across console pages. */
+/* Consistent, restrained data table treatment across dark console pages */
 @layer components {
   table {
     min-width: 100%;
@@ -199,20 +219,26 @@
     line-height: 1.25rem;
   }
   thead {
-    background-color: #f8fafc;
+    background-color: #111214;
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #64748b;
+    letter-spacing: 0.06em;
+    color: #71717a;
+    border-bottom: 1px solid #232529;
   }
   thead th {
     white-space: nowrap;
     font-weight: 600;
   }
   tbody tr {
-    transition-property: color, background-color, border-color;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 150ms;
+    border-bottom: 1px solid #1e2024;
+    transition: background-color 140ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  tbody tr:last-child {
+    border-bottom: none;
+  }
+  tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.025);
   }
 }
 
@@ -231,14 +257,19 @@
   position: relative;
   overflow: hidden;
   border-radius: 0.375rem;
-  background-color: rgba(226, 232, 240, 0.6);
+  background-color: rgba(255, 255, 255, 0.05);
 }
 .skeleton::after {
   content: "";
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background-image: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.7), transparent);
+  background-image: linear-gradient(
+    to right,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
   animation: shimmer 1.6s infinite;
 }
 

@@ -11,17 +11,17 @@ const ICONS = {
 };
 
 const STYLES = {
-  success: "border-emerald-200/80 bg-white text-ink-900",
-  error: "border-rose-200/80 bg-white text-ink-900",
-  warning: "border-amber-200/80 bg-white text-ink-900",
-  info: "border-ink-200/80 bg-white text-ink-900",
+  success: "border border-[#282A30] bg-[#16171A]/95 backdrop-blur-md text-[#F4F4F5] shadow-dropdown",
+  error: "border border-[#282A30] bg-[#16171A]/95 backdrop-blur-md text-[#F4F4F5] shadow-dropdown",
+  warning: "border border-[#282A30] bg-[#16171A]/95 backdrop-blur-md text-[#F4F4F5] shadow-dropdown",
+  info: "border border-[#282A30] bg-[#16171A]/95 backdrop-blur-md text-[#F4F4F5] shadow-dropdown",
 };
 
 const ICON_WRAP = {
-  success: "bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-100",
-  error: "bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-100",
-  warning: "bg-amber-50 text-amber-600 ring-1 ring-inset ring-amber-100",
-  info: "bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100",
+  success: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
+  error: "bg-rose-500/10 text-rose-400 border border-rose-500/20",
+  warning: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
+  info: "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20",
 };
 
 export function ToastProvider({ children }) {
@@ -60,7 +60,7 @@ export function ToastProvider({ children }) {
     <ToastContext.Provider value={value}>
       {children}
       <div
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2 p-4 sm:items-end"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2.5 p-4 sm:items-end"
         aria-live="polite"
         aria-atomic="true"
       >
@@ -83,10 +83,10 @@ export function ToastProvider({ children }) {
               </span>
               <div className="min-w-0 flex-1 pt-0.5">
                 {toast.title && (
-                  <p className="text-sm font-semibold text-ink-900">{toast.title}</p>
+                  <p className="text-sm font-semibold text-white">{toast.title}</p>
                 )}
                 {toast.message && (
-                  <p className="mt-0.5 break-words text-xs leading-relaxed text-ink-500">
+                  <p className="mt-0.5 break-words text-xs leading-relaxed text-slate-400">
                     {toast.message}
                   </p>
                 )}
@@ -94,7 +94,7 @@ export function ToastProvider({ children }) {
               <button
                 type="button"
                 onClick={() => dismiss(toast.id)}
-                className="rounded-md p-1 text-ink-400 opacity-80 transition hover:bg-ink-100 hover:opacity-100"
+                className="rounded-md p-1 text-slate-400 opacity-80 transition hover:bg-white/10 hover:text-white hover:opacity-100"
                 aria-label="Dismiss notification"
               >
                 <X className="h-4 w-4" />

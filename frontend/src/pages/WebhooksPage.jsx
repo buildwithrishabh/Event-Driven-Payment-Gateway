@@ -16,13 +16,15 @@ const EVENT_SAMPLE = `{
 }`;
 
 function Endpoint({ label, value, configured = true }) {
-  return <div className="rounded-lg border border-ink-200 bg-ink-50/60 p-3">
-    <p className="text-xs font-medium text-ink-500">{label}</p>
-    <div className="mt-1.5 flex items-center justify-between gap-2">
-      <code className="min-w-0 break-all font-mono text-sm text-ink-800">{value}</code>
-      {configured && <CopyButton value={value} showLabel={false} label={`Copy ${label.toLowerCase()}`} />}
+  return (
+    <div className="rounded-xl border border-[#232529] bg-[#111215] p-3.5">
+      <p className="text-xs font-medium text-zinc-400">{label}</p>
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        <code className="min-w-0 break-all font-mono text-sm text-zinc-200">{value}</code>
+        {configured && <CopyButton value={value} showLabel={false} label={`Copy ${label.toLowerCase()}`} />}
+      </div>
     </div>
-  </div>;
+  );
 }
 
 export default function WebhooksPage() {
@@ -46,15 +48,15 @@ export default function WebhooksPage() {
             icon={ArrowUpFromLine}
             action={
               <span
-                className={`chip text-xs ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border ${
                   outboundUrl
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-ink-200 bg-ink-50 text-ink-500"
+                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                    : "border-[#26282E] bg-[#16171A] text-zinc-400"
                 }`}
               >
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${
-                    outboundUrl ? "bg-emerald-500" : "bg-ink-400"
+                    outboundUrl ? "bg-emerald-400" : "bg-zinc-500"
                   }`}
                 />
                 {outboundUrl ? "Configured" : "Not Set"}
@@ -68,37 +70,39 @@ export default function WebhooksPage() {
               configured={Boolean(outboundUrl)}
             />
 
-            <div className="rounded-xl border border-ink-100 bg-ink-50/60 p-3.5 text-xs text-ink-600 space-y-1.5">
-              <p className="font-medium text-ink-900">Delivery Guarantees</p>
-              <p className="text-ink-500">
-                Events dispatched: <code className="font-mono text-brand-700">payment.succeeded</code> and{" "}
-                <code className="font-mono text-brand-700">payment.failed</code>.
+            <div className="rounded-xl border border-[#232529] bg-[#111215] p-4 text-xs text-zinc-400 space-y-2">
+              <p className="font-semibold text-zinc-200 flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                Delivery Guarantees
+              </p>
+              <p className="text-zinc-400 leading-relaxed">
+                Events dispatched: <code className="font-mono text-indigo-400 font-semibold">payment.succeeded</code> and{" "}
+                <code className="font-mono text-indigo-400 font-semibold">payment.failed</code>.
               </p>
             </div>
 
-            <details className="group rounded-xl border border-ink-200/80 bg-ink-50/40 p-4 transition-colors">
-              <summary className="flex cursor-pointer items-center justify-between text-xs font-semibold text-ink-700 select-none">
+            <details className="group rounded-xl border border-[#232529] bg-[#111215] p-4 transition-colors">
+              <summary className="flex cursor-pointer items-center justify-between text-xs font-semibold text-zinc-300 select-none">
                 <span>Webhook signature verification & sample payload</span>
-                <span className="text-ink-400 transition group-open:rotate-180">▾</span>
+                <span className="text-zinc-500 transition group-open:rotate-180">▾</span>
               </summary>
-              <div className="mt-3.5 space-y-3 text-xs text-ink-600">
-                <p>
+              <div className="mt-3.5 space-y-3 text-xs text-zinc-400">
+                <p className="leading-relaxed">
                   Every dispatch includes an HMAC-SHA256 signature in the{" "}
-                  <code className="font-mono rounded bg-ink-100 px-1 py-0.5 text-ink-800">
+                  <code className="font-mono rounded border border-[#26282E] bg-[#16171A] px-1.5 py-0.5 text-indigo-400">
                     x-signature
                   </code>{" "}
-                  header. Validate it against your secret.
+                  header. Validate it against your merchant secret.
                 </p>
-                <div className="relative overflow-hidden rounded-xl bg-ink-950 p-3.5">
+                <div className="relative overflow-hidden rounded-xl border border-[#232529] bg-[#0C0D0E] p-4">
                   <div className="absolute right-2.5 top-2.5">
                     <CopyButton
                       value={EVENT_SAMPLE}
                       showLabel={false}
                       label="Copy payload"
-                      className="border-white/10 bg-white/5 text-white hover:bg-white/15"
                     />
                   </div>
-                  <pre className="overflow-x-auto text-[11px] leading-relaxed text-slate-200">
+                  <pre className="overflow-x-auto text-[11px] leading-relaxed text-zinc-300 font-mono">
                     <code>{EVENT_SAMPLE}</code>
                   </pre>
                 </div>
@@ -114,8 +118,8 @@ export default function WebhooksPage() {
             description="Razorpay sends processor payment events directly to this URL."
             icon={ArrowDownToLine}
             action={
-              <span className="chip border-emerald-200 bg-emerald-50 text-emerald-700 text-xs">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                 Ready
               </span>
             }
@@ -123,25 +127,28 @@ export default function WebhooksPage() {
           <CardBody className="flex-1 space-y-5 p-6">
             <Endpoint label="Gateway Inbound Webhook URL" value={inboundUrl} />
 
-            <div className="rounded-xl border border-ink-100 bg-ink-50/60 p-3.5 text-xs text-ink-600 space-y-1.5">
-              <p className="font-medium text-ink-900">Processor Configuration</p>
-              <p className="text-ink-500">
+            <div className="rounded-xl border border-[#232529] bg-[#111215] p-4 text-xs text-zinc-400 space-y-2">
+              <p className="font-semibold text-zinc-200 flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                Processor Configuration
+              </p>
+              <p className="text-zinc-400 leading-relaxed">
                 Configure this webhook in your Razorpay Dashboard with events:{" "}
-                <code className="font-mono text-ink-800">payment.captured</code>,{" "}
-                <code className="font-mono text-ink-800">order.paid</code>, and{" "}
-                <code className="font-mono text-ink-800">payment.failed</code>.
+                <code className="font-mono text-zinc-300 font-semibold">payment.captured</code>,{" "}
+                <code className="font-mono text-zinc-300 font-semibold">order.paid</code>, and{" "}
+                <code className="font-mono text-zinc-300 font-semibold">payment.failed</code>.
               </p>
             </div>
 
-            <details className="group rounded-xl border border-ink-200/80 bg-ink-50/40 p-4 transition-colors">
-              <summary className="flex cursor-pointer items-center justify-between text-xs font-semibold text-ink-700 select-none">
+            <details className="group rounded-xl border border-[#232529] bg-[#111215] p-4 transition-colors">
+              <summary className="flex cursor-pointer items-center justify-between text-xs font-semibold text-zinc-300 select-none">
                 <span>Verification details</span>
-                <span className="text-ink-400 transition group-open:rotate-180">▾</span>
+                <span className="text-zinc-500 transition group-open:rotate-180">▾</span>
               </summary>
-              <div className="mt-3.5 space-y-2 text-xs text-ink-600">
+              <div className="mt-3.5 space-y-2 text-xs text-zinc-400 leading-relaxed">
                 <p>
                   Inbound requests are verified automatically via the{" "}
-                  <code className="font-mono rounded bg-ink-100 px-1 py-0.5 text-ink-800">
+                  <code className="font-mono rounded border border-[#26282E] bg-[#16171A] px-1.5 py-0.5 text-indigo-400">
                     x-razorpay-signature
                   </code>{" "}
                   HMAC header before committing double-entry records.

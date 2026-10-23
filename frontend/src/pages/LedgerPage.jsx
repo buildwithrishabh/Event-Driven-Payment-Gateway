@@ -34,7 +34,7 @@ export default function LedgerPage() {
     <div className="animate-fade-in space-y-6">
       <PageHeader
         title="Ledger"
-        description="Immutable double-entry balance accounting and ledger transactions."
+        description="Immutable double-entry balance accounting and ledger journal transactions."
         actions={
           <Button
             variant="secondary"
@@ -57,8 +57,8 @@ export default function LedgerPage() {
         <Card>
           <CardBody className="flex flex-wrap items-center justify-between gap-3 p-5">
             <div>
-              <p className="text-sm font-semibold text-ink-900">Ledger balance unavailable</p>
-              <p className="mt-1 text-sm text-ink-500">{balance.error.message}</p>
+              <p className="text-sm font-bold text-[#F4F4F5]">Ledger balance unavailable</p>
+              <p className="mt-1 text-xs text-zinc-400">{balance.error.message}</p>
             </div>
             <Button variant="secondary" size="sm" onClick={balance.refresh}>
               Try again
@@ -111,15 +111,15 @@ export default function LedgerPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
-                  <tr>
-                    <th className="px-5 py-3">Reference</th>
-                    <th className="px-5 py-3">Type</th>
-                    <th className="px-5 py-3">Amount</th>
-                    <th className="px-5 py-3">Recorded At</th>
-                    <th className="px-5 py-3 text-right">Action</th>
+                  <tr className="border-b border-[#232529] bg-[#111215] text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                    <th className="px-5 py-3.5">Reference</th>
+                    <th className="px-5 py-3.5">Type</th>
+                    <th className="px-5 py-3.5">Amount</th>
+                    <th className="px-5 py-3.5">Recorded At</th>
+                    <th className="px-5 py-3.5 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-ink-100">
+                <tbody className="divide-y divide-[#1E2024]">
                   {entries.map((entry) => {
                     const isCredit = entry.type === "CREDIT";
                     const paymentObj =
@@ -133,18 +133,18 @@ export default function LedgerPage() {
                     const typeStyle = statusStyle(LEDGER_TYPE_STYLES, entry.type);
 
                     return (
-                      <tr key={entry._id} className="hover:bg-ink-50/70">
+                      <tr key={entry._id} className="hover:bg-white/[0.02] transition-colors">
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-1.5">
                             {paymentRefId ? (
                               <Link
                                 to={`/payments/${paymentRefId}`}
-                                className="font-mono text-xs font-semibold text-brand-600 hover:underline"
+                                className="font-mono text-xs font-semibold text-indigo-400 hover:text-indigo-300 hover:underline"
                               >
                                 {referenceLabel}
                               </Link>
                             ) : (
-                              <span className="font-mono text-xs font-semibold text-ink-700">
+                              <span className="font-mono text-xs font-semibold text-zinc-300">
                                 {referenceLabel}
                               </span>
                             )}
@@ -156,7 +156,7 @@ export default function LedgerPage() {
                               />
                             )}
                           </div>
-                          <p className="mt-0.5 text-xs text-ink-500">{description}</p>
+                          <p className="mt-0.5 text-xs text-zinc-400">{description}</p>
                         </td>
                         <td className="px-5 py-3.5">
                           <span className={`chip ${typeStyle.className}`}>
@@ -164,26 +164,26 @@ export default function LedgerPage() {
                           </span>
                         </td>
                         <td
-                          className={`whitespace-nowrap px-5 py-3.5 text-xs font-semibold ${
-                            isCredit ? "text-emerald-700" : "text-rose-700"
+                          className={`whitespace-nowrap px-5 py-3.5 text-xs font-bold ${
+                            isCredit ? "text-emerald-400" : "text-rose-400"
                           }`}
                         >
                           {isCredit ? "+" : "-"}
                           {formatMoney(entry.amount, entry.currency)}
                         </td>
-                        <td className="whitespace-nowrap px-5 py-3.5 text-xs text-ink-500">
+                        <td className="whitespace-nowrap px-5 py-3.5 text-xs text-zinc-400">
                           {formatDateTime(entry.createdAt)}
                         </td>
                         <td className="px-5 py-3.5 text-right">
                           {paymentRefId ? (
                             <Link
                               to={`/payments/${paymentRefId}`}
-                              className="text-xs font-semibold text-brand-600 hover:underline"
+                              className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 hover:underline"
                             >
                               Details →
                             </Link>
                           ) : (
-                            <span className="text-xs text-ink-300">—</span>
+                            <span className="text-xs text-zinc-600">—</span>
                           )}
                         </td>
                       </tr>
@@ -194,16 +194,16 @@ export default function LedgerPage() {
             </div>
           ) : (
             <div className="py-14 text-center">
-              <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-xl bg-ink-100 text-ink-500">
+              <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-xl bg-[#1C1D21] text-zinc-400 border border-[#282A30]">
                 <BookText className="h-5 w-5" />
               </div>
-              <h3 className="text-sm font-semibold text-ink-900">No ledger entries yet</h3>
-              <p className="mt-1 text-xs text-ink-500">
+              <h3 className="text-sm font-bold text-[#F4F4F5]">No ledger entries yet</h3>
+              <p className="mt-1 text-xs text-zinc-400">
                 Successful payments automatically record ledger credit entries.
               </p>
               <Link
                 to="/payments"
-                className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-brand-50 px-3.5 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-100"
+                className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition-colors"
               >
                 Create a payment
               </Link>

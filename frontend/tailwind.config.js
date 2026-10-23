@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: "class",
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
     extend: {
@@ -24,11 +25,11 @@ export default {
         ],
       },
       colors: {
-        // Primary product accent — indigo/violet SaaS palette.
+        // Primary product accent — refined indigo/violet SaaS palette
         brand: {
-          50: "#eef2ff",
-          100: "#e0e7ff",
-          200: "#c7d2fe",
+          50: "rgba(99, 102, 241, 0.08)",
+          100: "rgba(99, 102, 241, 0.14)",
+          200: "rgba(99, 102, 241, 0.22)",
           300: "#a5b4fc",
           400: "#818cf8",
           500: "#6366f1",
@@ -38,11 +39,11 @@ export default {
           900: "#312e81",
           950: "#1e1b4b",
         },
-        // Secondary accent for gradients + highlights.
+        // Secondary accent for gradients + highlights
         accent: {
-          50: "#faf5ff",
-          100: "#f3e8ff",
-          200: "#e9d5ff",
+          50: "rgba(168, 85, 247, 0.08)",
+          100: "rgba(168, 85, 247, 0.15)",
+          200: "rgba(168, 85, 247, 0.25)",
           300: "#d8b4fe",
           400: "#c084fc",
           500: "#a855f7",
@@ -51,42 +52,56 @@ export default {
           800: "#6b21a8",
           900: "#581c87",
         },
+        // Premium Neutral Charcoal Palette (Linear / Stripe / Vercel dark theme)
         ink: {
-          50: "#f8fafc",
-          100: "#f1f5f9",
-          200: "#e2e8f0",
-          300: "#cbd5e1",
-          400: "#94a3b8",
-          500: "#64748b",
-          600: "#475569",
-          700: "#334155",
-          800: "#1e293b",
-          900: "#0f172a",
-          950: "#020617",
+          50: "#111215",    // deepest wells / inputs / recessed areas
+          100: "#16171A",   // standard card surface
+          200: "#232529",   // refined hairline borders
+          300: "#32353C",   // hover borders / active dividers
+          400: "#71717A",   // tertiary text / placeholders / subtle captions
+          500: "#A1A1AA",   // muted secondary text (highly readable)
+          600: "#D4D4D8",   // regular body text
+          700: "#E4E4E7",   // prominent body text
+          800: "#F4F4F5",   // headings / bright titles
+          900: "#FAFAFA",   // high-contrast headers
+          950: "#FFFFFF",   // pure white highlights
+        },
+        // Explicit dark tokens for modern fintech design
+        dark: {
+          bg: "#0C0D0E",          // neutral near-black canvas
+          sidebar: "#111215",     // subtly differentiated sidebar
+          card: "#16171A",        // cards: elevated, tactile, neutral
+          cardElevated: "#1C1D21",// modal / floating card / popover
+          well: "#111214",        // recessed inputs / table headers
+          border: "#232529",      // refined low-contrast borders
+          borderSubtle: "rgba(255, 255, 255, 0.05)",
+          borderHover: "#33363D", // hover state border
+          hover: "#1E2024",       // subtle hover tint
         },
       },
       backgroundImage: {
-        "brand-gradient": "linear-gradient(135deg, #4f46e5 0%, #4f46e5 100%)",
+        "brand-gradient": "linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)",
         "brand-gradient-soft":
-          "linear-gradient(135deg, rgba(79,70,229,0.12) 0%, rgba(168,85,247,0.12) 100%)",
+          "linear-gradient(135deg, rgba(79,70,229,0.12) 0%, rgba(99,102,241,0.06) 100%)",
         "grid-pattern":
-          "linear-gradient(to right, rgba(255,255,255,0.10) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.10) 1px, transparent 1px)",
+          "linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)",
       },
       backgroundSize: {
         "grid-32": "32px 32px",
       },
       boxShadow: {
-        "2xs": "0 1px 2px 0 rgb(15 23 42 / 0.04)",
-        xs: "0 1px 2px 0 rgb(15 23 42 / 0.05)",
-        card: "0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px -1px rgb(15 23 42 / 0.03)",
+        "2xs": "0 1px 2px 0 rgba(0, 0, 0, 0.35)",
+        xs: "0 1px 2px 0 rgba(0, 0, 0, 0.4)",
+        card: "0 1px 2px 0 rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)",
         "card-hover":
-          "0 4px 12px -4px rgb(15 23 42 / 0.10)",
-        soft: "0 2px 8px -2px rgb(15 23 42 / 0.06), 0 4px 16px -4px rgb(15 23 42 / 0.05)",
-        pop: "0 24px 48px -12px rgb(15 23 42 / 0.22), 0 8px 16px -8px rgb(15 23 42 / 0.12)",
-        glow: "0 10px 30px -8px rgba(79,70,229,0.5)",
-        "glow-sm": "0 6px 18px -6px rgba(79,70,229,0.45)",
-        subtle: "0 1px 2px 0 rgb(15 23 42 / 0.04)",
-        "inner-line": "inset 0 1px 0 0 rgb(255 255 255 / 0.08)",
+          "0 4px 12px -2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08)",
+        soft: "0 4px 16px -2px rgba(0, 0, 0, 0.5)",
+        pop: "0 20px 40px -10px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08)",
+        glow: "0 0 0 1px rgba(99, 102, 241, 0.35), 0 2px 8px -2px rgba(99, 102, 241, 0.2)",
+        "glow-sm": "0 1px 3px 0 rgba(0, 0, 0, 0.4)",
+        "glow-emerald": "0 0 0 1px rgba(16, 185, 129, 0.3)",
+        subtle: "0 1px 2px 0 rgba(0, 0, 0, 0.4)",
+        "inner-line": "inset 0 1px 0 0 rgba(255, 255, 255, 0.05)",
       },
       borderRadius: {
         "2xl": "0.75rem",

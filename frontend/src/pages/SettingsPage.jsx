@@ -38,7 +38,7 @@ export default function SettingsPage() {
             icon={Building2}
           />
           <CardBody className="p-6">
-            <dl className="divide-y divide-ink-100">
+            <dl className="divide-y divide-[#1E2024]">
               <InfoRow label="Business Name" value={merchant?.name || "—"} />
               <InfoRow label="Contact Email" value={merchant?.email || "—"} />
               <InfoRow
@@ -61,8 +61,8 @@ export default function SettingsPage() {
             icon={KeyRound}
           />
           <CardBody className="space-y-4 p-6">
-            <div className="flex items-center gap-2 rounded-xl border border-ink-200 bg-ink-50/70 p-3.5">
-              <code className="min-w-0 flex-1 break-all font-mono text-xs font-medium text-ink-900">
+            <div className="flex items-center gap-2 rounded-xl border border-[#232529] bg-[#111215] p-3.5">
+              <code className="min-w-0 flex-1 break-all font-mono text-xs font-medium text-zinc-200">
                 {revealKey ? apiKey : maskSecret(apiKey)}
               </code>
               <CopyButton value={apiKey} showLabel={false} label="Copy API key" />
@@ -77,24 +77,24 @@ export default function SettingsPage() {
                 {revealKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 {revealKey ? "Hide secret key" : "Reveal secret key"}
               </Button>
-              <span className="text-[11px] text-ink-400">Stored in browser local session</span>
+              <span className="text-[11px] text-zinc-500">Stored in browser local session</span>
             </div>
           </CardBody>
         </Card>
       </div>
 
       {/* Sign Out Card */}
-      <Card className="border-rose-100 bg-rose-50/20">
+      <Card className="border-rose-500/20 bg-rose-500/5">
         <CardBody className="flex flex-wrap items-center justify-between gap-4 p-5">
           <div>
-            <p className="text-sm font-semibold text-ink-900">Sign out of Console</p>
-            <p className="mt-0.5 text-xs text-ink-500">
+            <p className="text-sm font-semibold text-[#F4F4F5]">Sign out of Console</p>
+            <p className="mt-0.5 text-xs text-zinc-400">
               Clears your stored API key and session data from this browser.
             </p>
           </div>
           {confirmSignOut ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-rose-700 font-medium">Are you sure?</span>
+              <span className="text-xs text-rose-400 font-medium">Are you sure?</span>
               <Button variant="danger" size="sm" onClick={handleDisconnect}>
                 <LogOut className="h-3.5 w-3.5" /> Yes, sign out
               </Button>

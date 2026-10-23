@@ -6,12 +6,12 @@ export function Field({ label, hint, error, required, children, htmlFor }) {
       {label && (
         <label className="label" htmlFor={htmlFor}>
           {label}
-          {required && <span className="ml-0.5 text-rose-500">*</span>}
+          {required && <span className="ml-0.5 text-rose-400">*</span>}
         </label>
       )}
       {children}
       {error ? (
-        <p className="mt-1.5 text-xs font-medium text-rose-600">{error}</p>
+        <p className="mt-1.5 text-xs font-medium text-rose-400">{error}</p>
       ) : (
         hint && <p className="hint">{hint}</p>
       )}
@@ -35,7 +35,7 @@ const Input = forwardRef(function Input(
     >
       <div className="relative flex items-center">
         {prefix && (
-          <span className="pointer-events-none absolute left-3.5 text-sm text-ink-400">
+          <span className="pointer-events-none absolute left-3.5 text-sm text-zinc-500">
             {prefix}
           </span>
         )}
@@ -43,13 +43,13 @@ const Input = forwardRef(function Input(
           ref={ref}
           id={inputId}
           className={`input ${prefix ? "pl-9" : ""} ${suffix ? "pr-11" : ""} ${
-            error ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15" : ""
+            error ? "border-rose-500/70 focus:border-rose-500 focus:ring-rose-500/20" : ""
           } ${className}`}
           aria-invalid={Boolean(error)}
           {...props}
         />
         {suffix && (
-          <span className="absolute right-3 text-xs font-medium text-ink-400">
+          <span className="absolute right-3 text-xs font-medium text-zinc-500">
             {suffix}
           </span>
         )}
