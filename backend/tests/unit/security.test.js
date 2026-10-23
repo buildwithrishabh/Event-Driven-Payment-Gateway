@@ -87,4 +87,65 @@ describe("Security & Signature Verification Unit Tests", () => {
       expect(isValid).toBe(false);
     });
   });
+
+  describe("SSRF Webhook Validation (validateWebhookUrl & isPrivateOrReservedIP)", () => {
+    it("should identify private and link-local IP addresses", async () => {
+      const { isPrivateOrReservedIP } = await import(
+        "../../src/utils/ssrfValidator.js"
+      );
+
+      expect(isPrivateOrReservedIP("127.0.0.1")).toBe(true);
+      expect(isPrivateOrReservedIP("10.0.0.5")).toBe(true);
+      expect(isPrivateOrReservedIP("172.16.0.1")).toBe(true);
+      expect(isPrivateOrReservedIP("192.168.1.100")).toBe(true);
+      expect(isPrivateOrReservedIP("169.254.169.254")).toBe(true);
+      expect(isPrivateOrReservedIP("8.8.8.8")).toBe(false);
+      expect(isPrivateOrReservedIP("104.26.14.234")).toBe(false);
+    });
+
+    it("should reject localhost and internal hostnames", async () => {
+      const { validateWebhookUrl } = await import(
+        "../../src/utils/ssrfValidator.js"
+      );
+
+      await expect(
+        validateWebhookUrl("http://localhost/webhook"),
+      ).rejects.toThrow(/Local\/Internal hostnames/);
+      await expect(
+        validateWebhookUrl("http://service.local/api"),
+      ).rejects.toThrow(/Local\/Internal hostnames/);
+      await expect(
+        validateWebhookUrl("http://db.internal/api"),
+      ).rejects.toThrow(/Local\/Internal hostnames/);
+    });
+
+    it("should reject private and cloud metadata IP addresses", async () => {
+      const { validateWebhookUrl } = await import(
+        "../../src/utils/ssrfValidator.js"
+      );
+
+      await expect(
+        validateWebhookUrl("http://127.0.0.1:8000/webhook"),
+      ).rejects.toThrow(/Private or loopback IP/);
+      await expect(
+        validateWebhookUrl("http://169.254.169.254/latest/meta-data/"),
+      ).rejects.toThrow(/Private or loopback IP/);
+      await expect(
+        validateWebhookUrl("http://10.0.0.1/hook"),
+      ).rejects.toThrow(/Private or loopback IP/);
+    });
+
+    it("should reject invalid protocols and URLs with embedded credentials", async () => {
+      const { validateWebhookUrl } = await import(
+        "../../src/utils/ssrfValidator.js"
+      );
+
+      await expect(
+        validateWebhookUrl("ftp://example.com/webhook"),
+      ).rejects.toThrow(/Invalid protocol/);
+      await expect(
+        validateWebhookUrl("https://admin:secret@webhook.site/test"),
+      ).rejects.toThrow(/Credentials in webhook URL are forbidden/);
+    });
+  });
 });

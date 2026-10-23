@@ -5,6 +5,7 @@ import { WebhookDelivery } from "../modules/webhooks/webhook.model.js";
 import crypto from "crypto";
 import { logger } from "../config/logger.js";
 import { webhookCounter } from "../config/metrics.js";
+import { validateWebhookUrl } from "../utils/ssrfValidator.js";
 
 export const webhookWorker = new Worker(
   "webhook-delivery",
@@ -23,6 +24,30 @@ export const webhookWorker = new Worker(
       logger.warn(
         `Merchant ${merchantId} has no webhookSecret configured. Skipping.`,
       );
+      return;
+    }
+
+    // SSRF Validation & DNS Rebinding Check before dispatch
+    try {
+      await validateWebhookUrl(merchant.webhookUrl);
+    } catch (ssrfErr) {
+      logger.error(
+        `🚨 SSRF blocked for merchant ${merchantId} [${merchant.webhookUrl}]: ${ssrfErr.message}`,
+      );
+      webhookCounter.inc({ status: "FAILED" });
+      await WebhookDelivery.create({
+        merchantId,
+        paymentId,
+        eventType,
+        payload,
+        webhookUrl: merchant.webhookUrl,
+        responseStatus: null,
+        responseBody: null,
+        errorMessage: `Blocked by SSRF Protection: ${ssrfErr.message}`,
+        attemptNumber: job.attemptsMade + 1,
+        status: "FAILED",
+      });
+      // Return early and do not retry via BullMQ for malicious/internal URLs
       return;
     }
 

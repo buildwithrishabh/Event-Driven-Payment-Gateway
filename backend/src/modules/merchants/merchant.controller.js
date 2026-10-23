@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { Merchant } from "./merchant.model.js";
 import { logger } from "../../config/logger.js";
+import { validateWebhookUrl } from "../../utils/ssrfValidator.js";
 
 // Helper function to hash raw string using sha-256
 export function hashKey(rawKey) {
@@ -14,6 +15,16 @@ export async function registerMerchant(req, res) {
 
     if (!name || !email) {
       return res.status(400).json({ error: "name and email are required" });
+    }
+
+    if (webhookUrl) {
+      try {
+        await validateWebhookUrl(webhookUrl);
+      } catch (validationErr) {
+        return res
+          .status(400)
+          .json({ error: `Invalid webhookUrl: ${validationErr.message}` });
+      }
     }
 
     const existing = await Merchant.findOne({ email });

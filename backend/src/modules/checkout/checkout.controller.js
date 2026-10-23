@@ -69,7 +69,32 @@ export async function verifyCheckoutPayment(req, res) {
   }
 
   try {
-    // 1. Signature Verify karo
+    if (!mongoose.Types.ObjectId.isValid(paymentId)) {
+      return res.status(400).json({ error: "Invalid payment ID format" });
+    }
+
+    // 1. Payment fetch karo
+    const payment = await Payment.findById(paymentId);
+    if (!payment) {
+      return res.status(404).json({ error: "Payment not found" });
+    }
+
+    // 2. Check: Payment ke paas upstream orderId hona chahiye
+    if (!payment.razorpayOrderId) {
+      return res.status(400).json({
+        error: "Payment does not have an associated upstream order yet",
+      });
+    }
+
+    // 3. CRITICAL SECURITY CHECK: Kya incoming orderId database wale orderId se match karta hai?
+    if (payment.razorpayOrderId !== razorpayOrderId) {
+      return res.status(400).json({
+        error:
+          "Order ID mismatch: Provided order does not belong to this payment",
+      });
+    }
+
+    // 4. Signature Verify karo
     const isValid = verifyPaymentSignature({
       orderId: razorpayOrderId,
       paymentId: razorpayPaymentId,
@@ -78,12 +103,8 @@ export async function verifyCheckoutPayment(req, res) {
     if (!isValid) {
       return res.status(400).json({ error: "Invalid payment signature" });
     }
-    // 2. Payment fetch karo
-    const payment = await Payment.findById(paymentId);
-    if (!payment) {
-      return res.status(404).json({ error: "Payment not found" });
-    }
-    // 3. Status update aur ledger entry
+
+    // 5. Status update aur ledger entry
     if (payment.status !== "SUCCEEDED") {
       payment.status = "SUCCEEDED";
       payment.razorpayPaymentId = razorpayPaymentId;
@@ -113,4 +134,3 @@ export async function verifyCheckoutPayment(req, res) {
     return res.status(500).json({ error: "Failed to verify checkout payment" });
   }
 }
-
