@@ -2,6 +2,7 @@ import { Worker } from "bullmq";
 import { redisClient } from "../config/redis.js";
 import { Payment } from "../modules/payments/payment.model.js";
 import { createOrder } from "../modules/processors/razorpay.processor.js";
+import { webhookQueue } from "../queues/webhook.queue.js";
 import os from "os";
 import { paymentCounter } from "../config/metrics.js";
 import { logger } from "../config/logger.js";
@@ -14,11 +15,21 @@ export const paymentWorker = new Worker(
     const { paymentId, amount, currency } = job.data;
     logger.info(`[${workerId}] Processing payment: ${paymentId}`);
 
-    // 1. ATOMIC CLAIM: Only claim if status is still 'CREATED'
+    // Lock TTL: allow reclaiming stale locks from workers that died midway (> 2 mins ago)
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+
+    // 1. ATOMIC CLAIM: Claim if status is 'CREATED', or if previous worker crashed in 'PROCESSING' without upstream order
     const payment = await Payment.findOneAndUpdate(
       {
         _id: paymentId,
-        status: "CREATED",
+        $or: [
+          { status: "CREATED" },
+          {
+            status: "PROCESSING",
+            razorpayOrderId: null,
+            "processingLock.lockedAt": { $lt: twoMinutesAgo },
+          },
+        ],
       },
       {
         status: "PROCESSING",
@@ -64,7 +75,6 @@ export const paymentWorker = new Worker(
         `[${workerId}] Razorpay Order created: ${razorpayOrder.orderId} for Payment ${paymentId}`,
       );
     } catch (err) {
-      
       // Error aane par:
       paymentCounter.inc({ status: "FAILED", currency: currency || "INR" });
 
@@ -72,11 +82,46 @@ export const paymentWorker = new Worker(
         `[${workerId}] Razorpay call failed for payment ${paymentId}: ${err.message}`,
       );
 
-      // Release lock for BullMQ retry
-      payment.status = "CREATED";
-      payment.processingLock = null;
-      payment.failureReason = err.message;
-      await payment.save();
+      const maxAttempts = job.opts?.attempts || 3;
+      const isLastAttempt = job.attemptsMade + 1 >= maxAttempts;
+
+      if (isLastAttempt) {
+        // Terminal failure: retries exhausted -> mark FAILED permanently to prevent stuck payment
+        payment.status = "FAILED";
+        payment.processingLock = null;
+        payment.failureReason = `Exhausted retries: ${err.message}`;
+        await payment.save();
+
+        logger.warn(
+          `[${workerId}] Payment ${paymentId} permanently marked FAILED after ${maxAttempts} attempts`,
+        );
+
+        // Notify merchant webhook
+        if (webhookQueue) {
+          await webhookQueue.add("send-webhook", {
+            merchantId: payment.merchantId.toString(),
+            paymentId: payment._id,
+            eventType: "payment.failed",
+            payload: {
+              event: "payment.failed",
+              data: {
+                paymentId: payment._id,
+                status: "FAILED",
+                failureReason: payment.failureReason,
+                amount: payment.amount,
+                currency: payment.currency,
+              },
+            },
+          });
+        }
+      } else {
+        // Transient failure: release lock and return to CREATED for BullMQ retry
+        payment.status = "CREATED";
+        payment.processingLock = null;
+        payment.failureReason = err.message;
+        await payment.save();
+      }
+
       throw err; // Re-Throw trigger BullMq exponential backoff
     }
   },
