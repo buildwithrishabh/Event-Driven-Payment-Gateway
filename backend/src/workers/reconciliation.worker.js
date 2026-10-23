@@ -52,12 +52,20 @@ export async function runReconciliationSweep() {
 
           // Dispatch Webhook to merchant
           await webhookQueue.add("send-webhook", {
-            merchantId: payment.merchantId,
+            merchantId: payment.merchantId.toString(),
             paymentId: payment._id,
             eventType: "payment.succeeded",
             payload: {
               event: "payment.succeeded",
-              data: payment,
+              data: {
+                paymentId: payment._id,
+                razorpayOrderId: payment.razorpayOrderId,
+                razorpayPaymentId: payment.razorpayPaymentId,
+                amount: payment.amount,
+                currency: payment.currency,
+                status: "SUCCEEDED",
+                createdAt: payment.createdAt,
+              },
             },
           });
         } else {
@@ -73,12 +81,18 @@ export async function runReconciliationSweep() {
             await payment.save();
 
             await webhookQueue.add("send-webhook", {
-              merchantId: payment.merchantId,
+              merchantId: payment.merchantId.toString(),
               paymentId: payment._id,
               eventType: "payment.failed",
               payload: {
                 event: "payment.failed",
-                data: payment,
+                data: {
+                  paymentId: payment._id,
+                  status: "FAILED",
+                  failureReason: payment.failureReason,
+                  amount: payment.amount,
+                  currency: payment.currency,
+                },
               },
             });
           }
@@ -143,6 +157,8 @@ export async function runReconciliationSweep() {
 }
 
 export function startReconciliationWorker(intervalMs = 60000) {
-  logger.info(`⏱️ Reconciliation worker active (running every ${intervalMs / 1000}s)`);
+  logger.info(
+    `⏱️ Reconciliation worker active (running every ${intervalMs / 1000}s)`,
+  );
   return setInterval(runReconciliationSweep, intervalMs);
 }
