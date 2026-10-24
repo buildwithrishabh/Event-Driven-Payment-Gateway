@@ -181,14 +181,13 @@ export default function PaymentsPage() {
               />
               <Select
                 label="Currency"
-                value={form.currency}
-                onChange={update("currency")}
+                value="INR"
+                disabled
+                hint="Domestic payments only (INR)"
               >
-                {CURRENCIES.map((currency) => (
-                  <option key={currency} value={currency} className="bg-[#111215] text-[#F4F4F5]">
-                    {currency}
-                  </option>
-                ))}
+                <option value="INR" className="bg-[#111215] text-[#F4F4F5]">
+                  INR (₹)
+                </option>
               </Select>
               <Input
                 label="Customer name"

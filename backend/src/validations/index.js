@@ -55,9 +55,11 @@ export const createPaymentSchema = z.object({
     currency: z
       .string()
       .trim()
-      .length(3, "currency must be a 3-letter ISO code")
-      .default("INR")
-      .transform((val) => val.toUpperCase()),
+      .toUpperCase()
+      .refine((val) => val === "INR", {
+        message: "Only 'INR' currency is supported",
+      })
+      .default("INR"),
     customerName: z
       .string({ required_error: "customerName is required" })
       .trim()

@@ -10,6 +10,12 @@ export async function createPayment(req, res) {
   const { amount, currency, customerName, customerEmail, customerPhone } =
     req.body;
 
+  if (currency && currency.toUpperCase() !== "INR") {
+    return res.status(400).json({
+      error: "Only INR currency is supported",
+    });
+  }
+
   if (!amount || typeof amount !== "number" || amount < 100) {
     return res.status(400).json({
       error:

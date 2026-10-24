@@ -66,9 +66,9 @@ export function statusStyle(map, status) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Currencies offered in the create-payment form                               */
+/* Currencies offered in the create-payment form (Domestic INR only)           */
 /* -------------------------------------------------------------------------- */
-export const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD"];
+export const CURRENCIES = ["INR"];
 
 /* -------------------------------------------------------------------------- */
 /* Navigation                                                                  */

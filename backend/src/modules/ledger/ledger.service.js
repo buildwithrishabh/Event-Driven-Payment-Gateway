@@ -73,11 +73,12 @@ export async function recordDebit(
 }
 
 // Calculate current available balance using MongoDB Aggregation Pipeline
-export async function getBalance(merchantId) {
+export async function getBalance(merchantId, currency = "INR") {
   const pipeline = [
     {
       $match: {
         merchantId: new mongoose.Types.ObjectId(merchantId),
+        currency,
       },
     },
     {
@@ -109,7 +110,7 @@ export async function getBalance(merchantId) {
   const results = await LedgerEntry.aggregate(pipeline);
   return results.length > 0
     ? results[0]
-    : { currency: "INR", availableBalance: 0, totalCredits: 0, totalDebits: 0 };
+    : { currency , availableBalance: 0, totalCredits: 0, totalDebits: 0 };
 }
 
 export async function getLedgerEntries(
