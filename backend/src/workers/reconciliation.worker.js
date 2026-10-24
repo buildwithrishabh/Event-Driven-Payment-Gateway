@@ -1,5 +1,5 @@
 import { Payment } from "../modules/payments/payment.model.js";
-import { recordCredit } from "../modules/ledger/ledger.service.js";
+import { finalizePayment } from "../modules/payments/payment.service.js";
 import { webhookQueue } from "../queues/webhook.queue.js";
 import { fetchOrderPayments } from "../modules/processors/razorpay.processor.js";
 import { logger } from "../config/logger.js";
@@ -36,37 +36,9 @@ export async function runReconciliationSweep() {
             `💡 Razorpay verified payment ${successfulCharge.id} is captured! Reconciling to SUCCEEDED.`,
           );
 
-          payment.status = "SUCCEEDED";
-          payment.razorpayPaymentId = successfulCharge.id;
-          payment.failureReason = null;
-          payment.processingLock = null;
-          await payment.save();
-
-          // Record credit in Ledger
-          await recordCredit({
-            merchantId: payment.merchantId,
+          await finalizePayment({
             paymentId: payment._id,
-            amount: payment.amount,
-            currency: payment.currency,
-          });
-
-          // Dispatch Webhook to merchant
-          await webhookQueue.add("send-webhook", {
-            merchantId: payment.merchantId.toString(),
-            paymentId: payment._id,
-            eventType: "payment.succeeded",
-            payload: {
-              event: "payment.succeeded",
-              data: {
-                paymentId: payment._id,
-                razorpayOrderId: payment.razorpayOrderId,
-                razorpayPaymentId: payment.razorpayPaymentId,
-                amount: payment.amount,
-                currency: payment.currency,
-                status: "SUCCEEDED",
-                createdAt: payment.createdAt,
-              },
-            },
+            razorpayPaymentId: successfulCharge.id,
           });
         } else {
           // check if there are only failed attempts older than 10 minutes

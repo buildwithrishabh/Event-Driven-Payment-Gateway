@@ -8,6 +8,7 @@ import { webhookQueue } from "../queues/webhook.queue.js";
 import { REFUND_QUEUE_NAME } from "../queues/refund.queue.js";
 import { refundCounter } from "../config/metrics.js";
 import { logger } from "../config/logger.js";
+import mongoose from "mongoose";
 
 export const refundWorker = new Worker(
   REFUND_QUEUE_NAME,
@@ -42,26 +43,42 @@ export const refundWorker = new Worker(
         },
       );
 
-      // 2. Mark Refund as SUCCEEDED
-      refund.status = "SUCCEEDED";
-      refund.processorRefundId = razorpayResponse.id;
-      await refund.save();
+      const session = await mongoose.startSession();
+      session.startTransaction();
+
+      try {
+        // 1. Mark Refund as SUCCEEDED
+        refund.status = "SUCCEEDED";
+        refund.processorRefundId = razorpayResponse.id;
+        await refund.save({ session });
+
+        // 2. Record Immutable Ledger Debit entry (Reverses collected funds)
+        await recordDebit(
+          {
+            merchantId: refund.merchantId,
+            paymentId: refund.paymentId,
+            refundId: refund._id,
+            amount: refund.amount,
+            currency: refund.currency,
+            description: `Refund executed for payment ${refund.paymentId}`,
+          },
+          {
+            session,
+          },
+        );
+
+        await session.commitTransaction();
+      } catch (error) {
+        await session.abortTransaction();
+        throw error;
+      } finally {
+        await session.endSession();
+      }
+
       refundCounter.inc({ status: "SUCCEEDED" });
-
-      // 3. Record Immutable Ledger Debit entry (Reverses collected funds)
-      await recordDebit({
-        merchantId: refund.merchantId,
-        paymentId: refund.paymentId,
-        refundId: refund._id,
-        amount: refund.amount,
-        currency: refund.currency,
-        description: `Refund executed for payment ${refund.paymentId}`,
-      });
-
       logger.info(
         `✅ Refund ${refund._id} SUCCEEDED (Razorpay ID: ${razorpayResponse.id})`,
       );
-
       // 4. Emit Webhook event to merchant
       if (webhookQueue) {
         await webhookQueue.add("dispatch-webhook", {
@@ -92,7 +109,8 @@ export const refundWorker = new Worker(
         error?.error?.code === "BAD_REQUEST_ERROR" ||
         error?.error?.code === "GATEWAY_ERROR";
 
-      const isLastAttempt =( job.attemptsMade + 1 >= maxAttempts) || isfatalClientError;
+      const isLastAttempt =
+        job.attemptsMade + 1 >= maxAttempts || isfatalClientError;
 
       // Rollback payment.refundedAmount in DB on terminal failure
       if (isLastAttempt) {

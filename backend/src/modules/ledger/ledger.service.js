@@ -1,46 +1,60 @@
 import mongoose from "mongoose";
 import { LedgerEntry } from "./ledger.model.js";
 
-export async function recordCredit({
-  merchantId,
-  paymentId,
-  amount,
-  currency,
-}) {
+export async function recordCredit(
+  { merchantId, paymentId, amount, currency },
+  { session } = {},
+) {
   // check if entry already exists to ensure idempotency
-  const existingentry = await LedgerEntry.findOne({
+  let query = LedgerEntry.findOne({
     paymentId,
     type: "CREDIT",
   });
+
+  if (session && typeof query?.session === "function") {
+    query = query.session(session);
+  }
+  
+  const existingentry = await query;
   if (existingentry) {
     return existingentry;
   }
 
-  return await LedgerEntry.create({
+  const payload = {
     merchantId,
     paymentId,
     type: "CREDIT",
     amount,
     currency,
     description: `Payment collected for ${paymentId}`,
-  });
+  };
+
+  if (session) {
+    const [entry] = await LedgerEntry.create([payload], { session });
+    return entry;
+  }
+
+  return await LedgerEntry.create(payload);
 }
 
-export async function recordDebit({
-  merchantId,
-  paymentId,
-  refundId,
-  amount,
-  currency,
-  description,
-}) {
-  const existing = await LedgerEntry.findOne({ refundId, type: "DEBIT" });
+export async function recordDebit(
+  { merchantId, paymentId, refundId, amount, currency, description },
+  { session } = {},
+) {
+  let query = LedgerEntry.findOne({
+    refundId,
+    type: "DEBIT",
+  });
+  if (session && typeof query?.session === "function") {
+    query = query.session(session);
+  }
+  const existing = await query;
 
   if (existing) {
     return existing;
   }
 
-  return await LedgerEntry.create({
+  const payload = {
     merchantId,
     paymentId,
     refundId,
@@ -48,7 +62,14 @@ export async function recordDebit({
     amount,
     currency,
     description: description || `Refund debit for ${paymentId}`,
-  });
+  };
+
+  if (session) {
+    const [entry] = await LedgerEntry.create([payload], { session });
+    return entry;
+  }
+
+  return await LedgerEntry.create(payload);
 }
 
 // Calculate current available balance using MongoDB Aggregation Pipeline

@@ -1,8 +1,7 @@
 import mongoose from "mongoose";
 import { Payment } from "../payments/payment.model.js";
 import { verifyPaymentSignature } from "../processors/razorpay.processor.js";
-import { recordCredit } from "../ledger/ledger.service.js";
-import { webhookQueue } from "../../queues/webhook.queue.js";
+import { finalizePayment } from "../payments/payment.service.js";
 import { logger } from "../../config/logger.js";
 
 // GET /v1/checkout/:id
@@ -105,47 +104,18 @@ export async function verifyCheckoutPayment(req, res) {
       return res.status(400).json({ error: "Invalid payment signature" });
     }
 
-    // 5. Status update aur ledger entry
-    if (payment.status !== "SUCCEEDED") {
-      payment.status = "SUCCEEDED";
-      payment.razorpayPaymentId = razorpayPaymentId;
-      payment.razorpaySignature = razorpaySignature;
-      payment.failureReason = null;
-      await payment.save();
-      // Record credit in ledger
-      await recordCredit({
-        merchantId: payment.merchantId,
-        paymentId: payment._id,
-        amount: payment.amount,
-        currency: payment.currency,
-      });
+  
+    const updatePayment = await finalizePayment({
+      paymentId: payment._id,
+      razorpayPaymentId,
+      razorpaySignature,
+    });
 
-      // Dispatch webhook notification to merchant
-      if (webhookQueue) {
-        await webhookQueue.add("send-webhook", {
-          merchantId: payment.merchantId.toString(),
-          paymentId: payment._id,
-          eventType: "payment.succeeded",
-          payload: {
-            event: "payment.succeeded",
-            data: {
-              paymentId: payment._id,
-              razorpayOrderId: payment.razorpayOrderId,
-              razorpayPaymentId: payment.razorpayPaymentId,
-              amount: payment.amount,
-              currency: payment.currency,
-              status: "SUCCEEDED",
-              createdAt: payment.createdAt,
-            },
-          },
-        });
-      }
-    }
     return res.json({
       success: true,
       message: "Payment verified and recorded successfully",
       paymentId: payment._id,
-      status: payment.status,
+      status: updatePayment.status,
     });
   } catch (error) {
     logger.error("Checkout verification failed", {

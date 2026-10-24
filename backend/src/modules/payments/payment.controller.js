@@ -2,13 +2,13 @@ import mongoose from "mongoose";
 import { Payment } from "./payment.model.js";
 import { OutboxEvent } from "./outbox.model.js";
 import { verifyPaymentSignature } from "../processors/razorpay.processor.js";
-import { recordCredit } from "../ledger/ledger.service.js";
-import { webhookQueue } from "../../queues/webhook.queue.js";
 import { logger } from "../../config/logger.js";
+import { finalizePayment } from "./payment.service.js";
 
 // POST /v1/payments
 export async function createPayment(req, res) {
-  const { amount, currency, customerName, customerEmail, customerPhone } = req.body;
+  const { amount, currency, customerName, customerEmail, customerPhone } =
+    req.body;
 
   if (!amount || typeof amount !== "number" || amount < 100) {
     return res.status(400).json({
@@ -169,7 +169,8 @@ export async function verifyPayment(req, res) {
     // 3. CRITICAL SECURITY CHECK: Kya incoming orderId database wale orderId se match karta hai?
     if (payment.razorpayOrderId !== razorpayOrderId) {
       return res.status(400).json({
-        error: "Order ID mismatch: Provided order does not belong to this payment",
+        error:
+          "Order ID mismatch: Provided order does not belong to this payment",
       });
     }
 
@@ -184,48 +185,17 @@ export async function verifyPayment(req, res) {
       return res.status(400).json({ error: "Invalid Payment Signature" });
     }
 
-    // 5. Status update aur ledger entry (idempotent)
-    if (payment.status !== "SUCCEEDED") {
-      payment.status = "SUCCEEDED";
-      payment.razorpayPaymentId = razorpayPaymentId;
-      payment.razorpaySignature = razorpaySignature;
-      payment.failureReason = null;
-      await payment.save();
+    const updatePayment = await finalizePayment({
+      paymentId: payment._id,
+      razorpayPaymentId,
+      razorpaySignature,
+    });
 
-      // Record credit in ledger
-      await recordCredit({
-        merchantId: payment.merchantId,
-        paymentId: payment._id,
-        amount: payment.amount,
-        currency: payment.currency,
-      });
-
-      // Dispatch webhook notification to merchant
-      if (webhookQueue) {
-        await webhookQueue.add("send-webhook", {
-          merchantId: payment.merchantId.toString(),
-          paymentId: payment._id,
-          eventType: "payment.succeeded",
-          payload: {
-            event: "payment.succeeded",
-            data: {
-              paymentId: payment._id,
-              razorpayOrderId: payment.razorpayOrderId,
-              razorpayPaymentId: payment.razorpayPaymentId,
-              amount: payment.amount,
-              currency: payment.currency,
-              status: "SUCCEEDED",
-              createdAt: payment.createdAt,
-            },
-          },
-        });
-      }
-    }
     return res.json({
       success: true,
       message: "Payment verified and recorded successfully",
       paymentId: payment._id,
-      status: payment.status,
+      status: updatePayment.status,
     });
   } catch (error) {
     logger.error("Payment verification failed", {
